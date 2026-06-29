@@ -1,4 +1,5 @@
 import { EngineContext } from './useEngine';
+import { Capture } from './components/Capture';
 import type { CueEngine } from '@cue/engine';
 
 export function App({
@@ -14,6 +15,7 @@ export function App({
         <p role="status">Changes won't persist in this browser session.</p>
       )}
       <h1>Cue</h1>
+      <Capture />
     </EngineContext.Provider>
   );
 }
