@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { inboxItems, nextInboxItem } from './queue';
+import { inboxItems, nextInboxItem, nextBumpOrder } from './queue';
 import type { Item } from './types';
 
 function item(p: Partial<Item> & { id: string }): Item {
@@ -41,5 +41,27 @@ describe('queue ordering', () => {
       item({ id: 'bumped', createdAt: 5, order: -1 }),
     ];
     expect(nextInboxItem(items)?.id).toBe('bumped');
+  });
+});
+
+describe('nextBumpOrder', () => {
+  it('returns a value below the current minimum inbox order', () => {
+    const items: Item[] = [
+      item({ id: 'a', createdAt: 10, order: 10 }),
+      item({ id: 'b', createdAt: 20, order: 20 }),
+    ];
+    expect(nextBumpOrder(items)).toBeLessThan(10);
+  });
+
+  it('an item updated to nextBumpOrder becomes next', () => {
+    const items: Item[] = [
+      item({ id: 'a', createdAt: 10, order: 10 }),
+      item({ id: 'b', createdAt: 20, order: 20 }),
+    ];
+    const bumped = nextBumpOrder(items);
+    const after: Item[] = items.map((i) =>
+      i.id === 'b' ? { ...i, order: bumped } : i,
+    );
+    expect(nextInboxItem(after)?.id).toBe('b');
   });
 });

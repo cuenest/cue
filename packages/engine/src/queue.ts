@@ -13,3 +13,9 @@ export function inboxItems(items: Item[]): Item[] {
 export function nextInboxItem(items: Item[]): Item | undefined {
   return inboxItems(items)[0];
 }
+
+export function nextBumpOrder(items: Item[]): number {
+  const orders = inboxItems(items).map(effectiveOrder);
+  const min = orders.length ? Math.min(...orders) : Date.now();
+  return min - 1;
+}
