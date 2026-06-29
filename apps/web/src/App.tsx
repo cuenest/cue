@@ -1,5 +1,6 @@
 import { EngineContext } from './useEngine';
 import { Capture } from './components/Capture';
+import { Inbox } from './components/Inbox';
 import type { CueEngine } from '@cue/engine';
 
 export function App({
@@ -16,6 +17,7 @@ export function App({
       )}
       <h1>Cue</h1>
       <Capture />
+      <Inbox />
     </EngineContext.Provider>
   );
 }
