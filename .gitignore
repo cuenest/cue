@@ -22,3 +22,6 @@ build/
 
 # Test / coverage
 coverage/
+
+# Internal design specs — keep local, do not publish
+docs/superpowers/
