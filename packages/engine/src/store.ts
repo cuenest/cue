@@ -37,6 +37,28 @@ export class CueStore {
     this.items.forEach((ymap) => out.push(toItem(ymap)));
     return out;
   }
+
+  updateItem(
+    id: ItemId,
+    patch: Partial<Omit<Item, 'id' | 'createdAt'>>,
+    now: number = Date.now(),
+  ): Item {
+    const ymap = this.items.get(id);
+    if (!ymap) throw new Error(`Item not found: ${id}`);
+    this.doc.transact(() => {
+      for (const [key, value] of Object.entries(patch)) {
+        if (value !== undefined) ymap.set(key, value);
+      }
+      ymap.set('updatedAt', now);
+    });
+    return toItem(ymap);
+  }
+
+  subscribe(listener: () => void): () => void {
+    const handler = () => listener();
+    this.items.observeDeep(handler);
+    return () => this.items.unobserveDeep(handler);
+  }
 }
 
 function toItem(y: Y.Map<unknown>): Item {
