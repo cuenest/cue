@@ -25,3 +25,43 @@ describe('createEngine', () => {
     expect(listener).toHaveBeenCalled();
   });
 });
+
+describe('process actions', () => {
+  it('complete marks status done and removes it from inbox', () => {
+    const engine = createEngine();
+    const item = engine.addItem('a');
+    engine.complete(item.id);
+    expect(engine.getInbox()).toHaveLength(0);
+    expect(engine.getItems().find((i) => i.id === item.id)?.status).toBe('done');
+  });
+
+  it('schedule sets status scheduled and dueAt', () => {
+    const engine = createEngine();
+    const item = engine.addItem('a');
+    const updated = engine.schedule(item.id, 12345);
+    expect(updated.status).toBe('scheduled');
+    expect(updated.dueAt).toBe(12345);
+  });
+
+  it('delegate sets status delegated and delegatedTo', () => {
+    const engine = createEngine();
+    const item = engine.addItem('a');
+    const updated = engine.delegate(item.id, 'Sam');
+    expect(updated.status).toBe('delegated');
+    expect(updated.delegatedTo).toBe('Sam');
+  });
+
+  it('drop sets status dropped', () => {
+    const engine = createEngine();
+    const item = engine.addItem('a');
+    expect(engine.drop(item.id).status).toBe('dropped');
+  });
+
+  it('bump moves an item to the front of the queue', () => {
+    const engine = createEngine();
+    engine.addItem('first');
+    const second = engine.addItem('second');
+    engine.bump(second.id);
+    expect(engine.getNext()?.id).toBe(second.id);
+  });
+});

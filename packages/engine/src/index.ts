@@ -1,7 +1,7 @@
 import * as Y from 'yjs';
 import { CueStore } from './store';
-import { inboxItems, nextInboxItem } from './queue';
-import type { Item } from './types';
+import { inboxItems, nextInboxItem, nextBumpOrder } from './queue';
+import type { Item, ItemId } from './types';
 
 export const VERSION = '0.0.0';
 
@@ -11,6 +11,11 @@ export interface CueEngine {
   getNext(): Item | undefined;
   addItem(body: string): Item;
   subscribe(listener: () => void): () => void;
+  complete(id: ItemId): Item;
+  schedule(id: ItemId, dueAt: number): Item;
+  delegate(id: ItemId, delegatedTo: string): Item;
+  drop(id: ItemId): Item;
+  bump(id: ItemId): Item;
 }
 
 export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
@@ -34,6 +39,12 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
         listeners.delete(listener);
       };
     },
+    complete: (id) => store.updateItem(id, { status: 'done' }),
+    schedule: (id, dueAt) => store.updateItem(id, { status: 'scheduled', dueAt }),
+    delegate: (id, delegatedTo) =>
+      store.updateItem(id, { status: 'delegated', delegatedTo }),
+    drop: (id) => store.updateItem(id, { status: 'dropped' }),
+    bump: (id) => store.updateItem(id, { order: nextBumpOrder(snapshot) }),
   };
 }
 
