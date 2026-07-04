@@ -105,8 +105,10 @@ export class HubProvider {
             const plain = await decryptUpdate(this.opts.key, fromBase64Url(msg.data));
             Y.applyUpdate(this.doc, plain, this);
           }
-        } catch {
-          // wrong key or malformed frame — ignore rather than corrupt the doc
+        } catch (err) {
+          // a frame that cannot be decrypted (wrong key) or parsed must not corrupt
+          // the doc — but it must be VISIBLE, silent drops make sync undebuggable
+          console.warn('[cue-sync] dropped frame:', err);
         }
       })();
     };

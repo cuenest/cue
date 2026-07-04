@@ -14,6 +14,12 @@ if (persistent) {
 const engine = createEngine(doc);
 syncManager.init(doc); // starts encrypted sync if this device is in a sync space
 
+if (import.meta.env.DEV) {
+  // dev-only debug handles
+  (window as unknown as Record<string, unknown>).__cueDoc = doc;
+  (window as unknown as Record<string, unknown>).__cueEngine = engine;
+}
+
 createRoot(document.getElementById('root')!).render(
   <App engine={engine} persistent={persistent} />,
 );

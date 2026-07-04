@@ -120,9 +120,9 @@ Cue is in early development. The work is divided into phases, each independently
 
 | Phase | Scope | State |
 | --- | --- | --- |
-| 0 | Single-device capture and the processing queue | In progress |
-| 1 | Multi-device synchronization, QR linking, and the self-hosted node | Planned |
-| 2 | Master calendar with multi-source import | Planned |
+| 0 | Single-device capture and the processing queue | Shipped (web) |
+| 1 | Multi-device synchronization, link codes/QR, and the self-hosted node | Working — encrypted sync between browsers via `apps/hub` |
+| 2 | Master calendar with multi-source import | Working — ICS import, recurrence expansion, month view |
 | 3 | Shared spaces, per-person permissions, and secure file transfer | Planned |
 | 4 | On-device assistant | Planned |
 
