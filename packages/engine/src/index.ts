@@ -102,3 +102,6 @@ export { CueStore } from './store';
 export * as queue from './queue';
 export { parseIcsEvents } from './calendar';
 export type { CalendarEvent, CalendarSource } from './calendar';
+export { generateSyncKey, encryptUpdate, decryptUpdate } from './sync/crypto';
+export { makeLinkCode, parseLinkCode, type LinkPayload } from './sync/link';
+export { HubProvider, type SyncStatus, type HubProviderOptions } from './sync/provider';
