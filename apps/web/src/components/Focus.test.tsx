@@ -42,7 +42,7 @@ describe('Focus', () => {
     renderFocus(engine);
 
     await user.click(screen.getByRole('button', { name: 'Delegate' }));
-    const item = engine.getItems()[0];
+    const item = engine.getItems()[0]!;
     expect(item.status).toBe('delegated');
     expect(item.delegatedTo).toBe('Sam');
   });
