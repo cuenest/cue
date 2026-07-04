@@ -25,3 +25,6 @@ coverage/
 
 # Internal design specs — keep local, do not publish
 docs/superpowers/
+
+# SDD orchestration scratch — local only
+.superpowers/
