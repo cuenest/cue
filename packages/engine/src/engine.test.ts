@@ -65,3 +65,36 @@ describe('process actions', () => {
     expect(engine.getNext()?.id).toBe(second.id);
   });
 });
+
+describe('requeue, edit, undo', () => {
+  it('requeue returns a processed item to the front of the queue', () => {
+    const engine = createEngine();
+    engine.addItem('a');
+    const b = engine.addItem('b');
+    engine.complete(b.id);
+    engine.requeue(b.id);
+    expect(engine.getNext()?.id).toBe(b.id);
+    expect(engine.getInbox()).toHaveLength(2);
+  });
+
+  it('edit updates the body and keeps status', () => {
+    const engine = createEngine();
+    const item = engine.addItem('typo');
+    const updated = engine.edit(item.id, 'fixed');
+    expect(updated.body).toBe('fixed');
+    expect(updated.status).toBe('inbox');
+  });
+
+  it('undo reverts the most recent action', () => {
+    const engine = createEngine();
+    const item = engine.addItem('a');
+    engine.complete(item.id);
+    engine.undo();
+    expect(engine.getItems().find((i) => i.id === item.id)?.status).toBe('inbox');
+  });
+
+  it('undo with nothing to undo is a no-op', () => {
+    const engine = createEngine();
+    expect(() => engine.undo()).not.toThrow();
+  });
+});

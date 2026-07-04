@@ -8,11 +8,11 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { ScrollProgress } from './components/ScrollProgress';
 import { cn } from './lib/utils';
 
-function Cross({ className }: { className: string }) {
-  return <span aria-hidden="true" className={cn('cross', className)} />;
+function Marker({ className }: { className: string }) {
+  return <span aria-hidden="true" className={cn('marker', className)} />;
 }
 
-/** A horizontal rule across the column with + markers where it meets the frame. */
+/** A horizontal rule across the column with dot pins where it meets the frame. */
 function Panel({
   children,
   delay = 0,
@@ -27,8 +27,8 @@ function Panel({
       className={cn('rise relative border-t border-border', className)}
       style={{ animationDelay: `${delay}ms` }}
     >
-      <Cross className="-left-[4.5px] -top-[4.5px]" />
-      <Cross className="-right-[4.5px] -top-[4.5px]" />
+      <Marker className="-left-[3px] -top-[3px]" />
+      <Marker className="-right-[3px] -top-[3px]" />
       {children}
     </div>
   );
@@ -41,6 +41,17 @@ export function App({
   engine: CueEngine;
   persistent?: boolean;
 }) {
+  function exportJson() {
+    const data = JSON.stringify(engine.getItems(), null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cue-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <EngineContext.Provider value={engine}>
       <ScrollProgress />
@@ -88,12 +99,21 @@ export function App({
         <Panel delay={240} className="mt-auto">
           <footer className="flex items-center justify-between px-5 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:px-6">
             <span>local-first · zero-knowledge</span>
-            <span>cuenest / cue</span>
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={exportJson}
+                className="uppercase tracking-[0.2em] underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              >
+                export
+              </button>
+              <span>cuenest / cue</span>
+            </div>
           </footer>
         </Panel>
 
-        <Cross className="-bottom-[4.5px] -left-[4.5px]" />
-        <Cross className="-bottom-[4.5px] -right-[4.5px]" />
+        <Marker className="-bottom-[3px] -left-[3px]" />
+        <Marker className="-bottom-[3px] -right-[3px]" />
       </main>
     </EngineContext.Provider>
   );

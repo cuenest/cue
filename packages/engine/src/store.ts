@@ -59,6 +59,11 @@ export class CueStore {
     this.items.observeDeep(handler);
     return () => this.items.unobserveDeep(handler);
   }
+
+  /** Undo manager over the items map. captureTimeout 0 keeps each mutation a separate undo step. */
+  createUndoManager(): Y.UndoManager {
+    return new Y.UndoManager(this.items, { captureTimeout: 0 });
+  }
 }
 
 function toItem(y: Y.Map<unknown>): Item {

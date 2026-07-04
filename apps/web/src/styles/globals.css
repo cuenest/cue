@@ -21,9 +21,8 @@
   --accent-foreground: #4a4636;
   --ring: #d9ae00;
 
-  --grid-dot: rgb(29 27 22 / 0.16);
-  --grid-line: rgb(29 27 22 / 0.05);
-  --cross: rgb(29 27 22 / 0.45);
+  --grid-dot: rgb(29 27 22 / 0.2);
+  --marker: rgb(29 27 22 / 0.4);
 
   /* stacked sheets: card-coloured gaps between thin ink lines */
   --stack:
@@ -53,9 +52,8 @@
   --accent-foreground: #e8d998;
   --ring: #caa200;
 
-  --grid-dot: rgb(236 231 218 / 0.09);
-  --grid-line: rgb(236 231 218 / 0.05);
-  --cross: rgb(236 231 218 / 0.4);
+  --grid-dot: rgb(236 231 218 / 0.11);
+  --marker: rgb(236 231 218 / 0.38);
 }
 
 @theme inline {
@@ -89,15 +87,19 @@
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    /* graph paper: faint major grid + dot minor grid */
-    background-image:
-      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
-      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px),
-      radial-gradient(var(--grid-dot) 1px, transparent 1px);
-    background-size:
-      96px 96px,
-      96px 96px,
-      24px 24px;
+  }
+
+  /* dot-grid paper, fading out toward the bottom so it never competes with content */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: radial-gradient(var(--grid-dot) 1px, transparent 1.4px);
+    background-size: 22px 22px;
+    -webkit-mask-image: radial-gradient(ellipse 110% 85% at 50% 0%, black 35%, transparent 96%);
+    mask-image: radial-gradient(ellipse 110% 85% at 50% 0%, black 35%, transparent 96%);
   }
 
   ::selection {
@@ -109,31 +111,15 @@
 /* ---------------------------------------------------------------- pieces */
 
 @layer components {
-  /* + marker at rule intersections */
-  .cross {
+  /* dot pin where a section rule meets the column frame */
+  .marker {
     position: absolute;
     z-index: 10;
-    width: 9px;
-    height: 9px;
+    width: 5px;
+    height: 5px;
+    border-radius: 9999px;
+    background: var(--marker);
     pointer-events: none;
-  }
-  .cross::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 4px;
-    height: 1px;
-    background: var(--cross);
-  }
-  .cross::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 4px;
-    width: 1px;
-    background: var(--cross);
   }
 
   /* a sheet of paper sitting on the stack */
@@ -143,6 +129,7 @@
     box-shadow: var(--stack);
   }
 
+  /* page-load rise */
   .rise {
     animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
@@ -157,8 +144,24 @@
     }
   }
 
+  /* next card dealt onto the stack */
+  .deal {
+    animation: deal 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes deal {
+    from {
+      opacity: 0;
+      transform: translateY(7px) rotate(-0.4deg);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .rise {
+    .rise,
+    .deal {
       animation: none;
     }
   }

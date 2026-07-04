@@ -16,10 +16,17 @@ export interface CueEngine {
   delegate(id: ItemId, delegatedTo: string): Item;
   drop(id: ItemId): Item;
   bump(id: ItemId): Item;
+  /** Return a processed item to the front of the queue. */
+  requeue(id: ItemId): Item;
+  /** Rewrite an item's body. */
+  edit(id: ItemId, body: string): Item;
+  /** Revert the most recent local mutation. No-op when there is nothing to undo. */
+  undo(): void;
 }
 
 export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
   const store = new CueStore(doc);
+  const undoManager = store.createUndoManager();
   let snapshot: Item[] = store.getAllItems();
   const listeners = new Set<() => void>();
 
@@ -45,6 +52,11 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
       store.updateItem(id, { status: 'delegated', delegatedTo }),
     drop: (id) => store.updateItem(id, { status: 'dropped' }),
     bump: (id) => store.updateItem(id, { order: nextBumpOrder(snapshot) }),
+    requeue: (id) => store.updateItem(id, { status: 'inbox', order: nextBumpOrder(snapshot) }),
+    edit: (id, body) => store.updateItem(id, { body }),
+    undo: () => {
+      undoManager.undo();
+    },
   };
 }
 
