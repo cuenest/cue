@@ -24,15 +24,9 @@
   --grid-dot: rgb(29 27 22 / 0.2);
   --marker: rgb(29 27 22 / 0.4);
 
-  /* stacked sheets: card-coloured gaps between thin ink lines */
-  --stack:
-    3px 3px 0 0 var(--card),
-    4px 4px 0 0 var(--border-strong),
-    7px 7px 0 0 var(--card),
-    8px 8px 0 0 var(--border-strong);
-  --stack-sm:
-    2px 2px 0 0 var(--card),
-    3px 3px 0 0 var(--border-strong);
+  /* single solid offset — a sheet resting on the desk */
+  --stack: 5px 5px 0 0 var(--border-strong);
+  --stack-sm: 3px 3px 0 0 var(--border-strong);
 }
 
 .dark {
@@ -54,6 +48,10 @@
 
   --grid-dot: rgb(236 231 218 / 0.11);
   --marker: rgb(236 231 218 / 0.38);
+
+  /* softened in dark so the offset doesn't glare */
+  --stack: 5px 5px 0 0 rgb(236 231 218 / 0.32);
+  --stack-sm: 3px 3px 0 0 rgb(236 231 218 / 0.32);
 }
 
 @theme inline {
