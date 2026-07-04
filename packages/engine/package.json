@@ -8,12 +8,14 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "yjs": "^13.6.0"
   },
   "devDependencies": {
+    "@types/node": "^24.0.0",
     "vitest": "^2.0.0",
     "typescript": "^5.4.0"
   }
