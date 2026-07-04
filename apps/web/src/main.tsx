@@ -1,3 +1,4 @@
+import './styles/globals.css';
 import { createRoot } from 'react-dom/client';
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';

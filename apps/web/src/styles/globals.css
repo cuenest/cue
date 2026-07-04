@@ -1,0 +1,165 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------- tokens */
+
+:root {
+  color-scheme: light;
+
+  --background: #f6f4ee; /* warm paper */
+  --foreground: #1d1b16; /* warm ink */
+  --card: #fffdf7; /* fresh sheet */
+  --card-foreground: #1d1b16;
+  --muted: #ece8dd;
+  --muted-foreground: #6f6a5c;
+  --border: #dad5c6; /* hairline rule */
+  --border-strong: #1d1b16; /* ink rule (cards, buttons) */
+  --primary: #ffd21e; /* highlighter yellow */
+  --primary-foreground: #1d1b16;
+  --accent: #fdf3c8; /* soft yellow wash */
+  --accent-foreground: #4a4636;
+  --ring: #d9ae00;
+
+  --grid-dot: rgb(29 27 22 / 0.16);
+  --grid-line: rgb(29 27 22 / 0.05);
+  --cross: rgb(29 27 22 / 0.45);
+
+  /* stacked sheets: card-coloured gaps between thin ink lines */
+  --stack:
+    3px 3px 0 0 var(--card),
+    4px 4px 0 0 var(--border-strong),
+    7px 7px 0 0 var(--card),
+    8px 8px 0 0 var(--border-strong);
+  --stack-sm:
+    2px 2px 0 0 var(--card),
+    3px 3px 0 0 var(--border-strong);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: #12110e; /* carbon paper */
+  --foreground: #ece7da; /* bone ink */
+  --card: #1a1915;
+  --card-foreground: #ece7da;
+  --muted: #24221c;
+  --muted-foreground: #8f897a;
+  --border: #2c2a23;
+  --border-strong: #e6e0cf; /* bone rule on carbon */
+  --primary: #ffd21e;
+  --primary-foreground: #1d1b16;
+  --accent: #2a2614;
+  --accent-foreground: #e8d998;
+  --ring: #caa200;
+
+  --grid-dot: rgb(236 231 218 / 0.09);
+  --grid-line: rgb(236 231 218 / 0.05);
+  --cross: rgb(236 231 218 / 0.4);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+
+  --font-sans: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* ---------------------------------------------------------------- base */
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    /* graph paper: faint major grid + dot minor grid */
+    background-image:
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px),
+      radial-gradient(var(--grid-dot) 1px, transparent 1px);
+    background-size:
+      96px 96px,
+      96px 96px,
+      24px 24px;
+  }
+
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+}
+
+/* ---------------------------------------------------------------- pieces */
+
+@layer components {
+  /* + marker at rule intersections */
+  .cross {
+    position: absolute;
+    z-index: 10;
+    width: 9px;
+    height: 9px;
+    pointer-events: none;
+  }
+  .cross::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 4px;
+    height: 1px;
+    background: var(--cross);
+  }
+  .cross::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    width: 1px;
+    background: var(--cross);
+  }
+
+  /* a sheet of paper sitting on the stack */
+  .sheet {
+    background: var(--card);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--stack);
+  }
+
+  .rise {
+    animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rise {
+      animation: none;
+    }
+  }
+}

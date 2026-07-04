@@ -12,10 +12,15 @@
   },
   "dependencies": {
     "@cue/engine": "workspace:*",
+    "@tailwindcss/vite": "^4.3.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "yjs": "^13.6.0",
-    "y-indexeddb": "^9.0.0"
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.2",
+    "y-indexeddb": "^9.0.0",
+    "yjs": "^13.6.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.4.0",
