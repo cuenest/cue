@@ -1,6 +1,7 @@
 import * as Y from 'yjs';
 import { CueStore } from './store';
 import { inboxItems, nextInboxItem, nextBumpOrder } from './queue';
+import { parseIcsEvents, type CalendarEvent, type CalendarSource } from './calendar';
 import type { Item, ItemId } from './types';
 
 export const VERSION = '0.0.0';
@@ -22,6 +23,12 @@ export interface CueEngine {
   edit(id: ItemId, body: string): Item;
   /** Revert the most recent local mutation. No-op when there is nothing to undo. */
   undo(): void;
+  /** Import a read-only calendar feed. */
+  addSource(input: { name: string; color: string; icsText: string; url?: string }): CalendarSource;
+  removeSource(id: string): void;
+  getSources(): CalendarSource[];
+  /** Master calendar: imported (locked) events merged with scheduled Cue items, sorted by start. */
+  getCalendarEvents(rangeStart: number, rangeEnd: number): CalendarEvent[];
 }
 
 export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
@@ -32,6 +39,9 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
 
   store.subscribe(() => {
     snapshot = store.getAllItems();
+    listeners.forEach((l) => l());
+  });
+  store.subscribeSources(() => {
     listeners.forEach((l) => l());
   });
 
@@ -57,9 +67,38 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
     undo: () => {
       undoManager.undo();
     },
+    addSource: (input) => store.addSource(input),
+    removeSource: (id) => store.removeSource(id),
+    getSources: () => store.getSources(),
+    getCalendarEvents: (rangeStart, rangeEnd) => {
+      const events: CalendarEvent[] = [];
+      for (const src of store.getSources()) {
+        const ics = store.getSourceIcs(src.id);
+        if (!ics) continue;
+        for (const e of parseIcsEvents(ics, rangeStart, rangeEnd)) {
+          events.push({ ...e, locked: true, refId: src.id, color: src.color });
+        }
+      }
+      for (const item of snapshot) {
+        if (item.status !== 'scheduled' || typeof item.dueAt !== 'number') continue;
+        if (item.dueAt >= rangeEnd || item.dueAt + 60 * 60 * 1000 <= rangeStart) continue;
+        events.push({
+          id: `item:${item.id}`,
+          title: item.body,
+          start: item.dueAt,
+          end: item.dueAt + 60 * 60 * 1000,
+          allDay: false,
+          locked: false,
+          refId: item.id,
+        });
+      }
+      return events.sort((a, b) => a.start - b.start);
+    },
   };
 }
 
 export * from './types';
 export { CueStore } from './store';
 export * as queue from './queue';
+export { parseIcsEvents } from './calendar';
+export type { CalendarEvent, CalendarSource } from './calendar';
