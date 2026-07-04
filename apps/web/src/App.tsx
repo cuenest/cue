@@ -1,36 +1,40 @@
-import type { ReactNode } from 'react';
 import type { CueEngine } from '@cue/engine';
 import { EngineContext } from './useEngine';
-import { Capture } from './components/Capture';
-import { Focus } from './components/Focus';
-import { Inbox } from './components/Inbox';
+import { Panel, Marker } from './components/Panel';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ScrollProgress } from './components/ScrollProgress';
+import { QueueView } from './views/QueueView';
+import { CalendarView } from './views/CalendarView';
+import { SettingsView } from './views/SettingsView';
+import { useRoute, navigate, type Route } from './router';
+import { useSyncStatus } from './sync/manager';
 import { cn } from './lib/utils';
 
-function Marker({ className }: { className: string }) {
-  return <span aria-hidden="true" className={cn('marker', className)} />;
-}
+const ROUTES: Route[] = ['queue', 'calendar', 'settings'];
 
-/** A horizontal rule across the column with dot pins where it meets the frame. */
-function Panel({
-  children,
-  delay = 0,
-  className,
-}: {
-  children: ReactNode;
-  delay?: number;
-  className?: string;
-}) {
+function Nav({ active }: { active: Route }) {
+  const syncStatus = useSyncStatus();
   return (
-    <div
-      className={cn('rise relative border-t border-border', className)}
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <Marker className="-left-[3px] -top-[3px]" />
-      <Marker className="-right-[3px] -top-[3px]" />
-      {children}
-    </div>
+    <nav className="flex items-center gap-1.5">
+      {ROUTES.map((r) => (
+        <button
+          key={r}
+          type="button"
+          onClick={() => navigate(r)}
+          className={cn(
+            'rounded-[2px] border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.15em] transition-colors',
+            active === r
+              ? 'border-border-strong bg-primary font-semibold text-primary-foreground'
+              : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground',
+          )}
+        >
+          {r}
+          {r === 'settings' && syncStatus === 'connected' && (
+            <span aria-hidden="true" className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-current align-middle" />
+          )}
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -41,16 +45,7 @@ export function App({
   engine: CueEngine;
   persistent?: boolean;
 }) {
-  function exportJson() {
-    const data = JSON.stringify(engine.getItems(), null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `cue-export-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  const route = useRoute();
 
   return (
     <EngineContext.Provider value={engine}>
@@ -67,7 +62,7 @@ export function App({
 
       <main className="relative mx-auto flex min-h-dvh w-full max-w-2xl flex-col border-x border-border">
         <Panel delay={0}>
-          <header className="flex items-center justify-between px-5 py-4 sm:px-6">
+          <header className="flex items-center justify-between gap-3 px-5 py-4 sm:px-6">
             <h1 className="flex items-baseline gap-1.5 font-sans text-2xl font-extrabold tracking-tight">
               Cue
               <span
@@ -76,39 +71,20 @@ export function App({
               />
             </h1>
             <div className="flex items-center gap-3">
-              <span className="hidden font-mono text-[11px] text-muted-foreground sm:block">
-                capture → focus → done
-              </span>
+              <Nav active={route} />
               <ThemeToggle />
             </div>
           </header>
         </Panel>
 
-        <Panel delay={60}>
-          <Capture />
-        </Panel>
-
-        <Panel delay={120}>
-          <Focus />
-        </Panel>
-
-        <Panel delay={180}>
-          <Inbox />
-        </Panel>
+        {route === 'queue' && <QueueView />}
+        {route === 'calendar' && <CalendarView />}
+        {route === 'settings' && <SettingsView />}
 
         <Panel delay={240} className="mt-auto">
           <footer className="flex items-center justify-between px-5 py-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:px-6">
             <span>local-first · zero-knowledge</span>
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                onClick={exportJson}
-                className="uppercase tracking-[0.2em] underline-offset-2 transition-colors hover:text-foreground hover:underline"
-              >
-                export
-              </button>
-              <span>cuenest / cue</span>
-            </div>
+            <span>cuenest / cue</span>
           </footer>
         </Panel>
 

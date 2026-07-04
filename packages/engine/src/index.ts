@@ -42,6 +42,7 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
     listeners.forEach((l) => l());
   });
   store.subscribeSources(() => {
+    snapshot = store.getAllItems(); // fresh ref so UI snapshots invalidate on source changes too
     listeners.forEach((l) => l());
   });
 
