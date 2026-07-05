@@ -1,0 +1,18 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true
+  },
+  "include": [
+    "entrypoints",
+    "lib",
+    "wxt.config.ts",
+    "vitest.config.ts",
+    ".wxt/types/**/*.d.ts",
+    ".wxt/wxt.d.ts"
+  ]
+}
