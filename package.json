@@ -15,6 +15,9 @@
   "pnpm": {
     "overrides": {
       "wxt>vite": "^6.3.4"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
   }
 }

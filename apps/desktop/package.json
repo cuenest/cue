@@ -1,0 +1,20 @@
+{
+  "name": "@cue/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cue desktop shell — the same local-first app with a global capture hotkey.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc && electron . --dev-url=http://localhost:5178",
+    "start": "tsc && electron .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "electron": "^43.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  }
+}
