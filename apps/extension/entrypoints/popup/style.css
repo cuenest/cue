@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --background: #f6f4ee;
+  --foreground: #1d1b16;
+  --card: #fffdf7;
+  --muted-foreground: #6f6a5c;
+  --border: #dad5c6;
+  --border-strong: #1d1b16;
+  --primary: #ffd21e;
+  --primary-foreground: #1d1b16;
+  --accent: #fdf3c8;
+  --ring: #d9ae00;
+  --grid-dot: rgb(29 27 22 / 0.16);
+  --stack-sm: 3px 3px 0 0 var(--border-strong);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #12110e;
+  --foreground: #ece7da;
+  --card: #1a1915;
+  --muted-foreground: #8f897a;
+  --border: #2c2a23;
+  --border-strong: #e6e0cf;
+  --primary: #ffd21e;
+  --primary-foreground: #1d1b16;
+  --accent: #2a2614;
+  --ring: #caa200;
+  --grid-dot: rgb(236 231 218 / 0.09);
+  --stack-sm: 3px 3px 0 0 rgb(236 231 218 / 0.32);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-ring: var(--ring);
+  --font-sans: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    width: 360px;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    background-image: radial-gradient(var(--grid-dot) 1px, transparent 1.4px);
+    background-size: 22px 22px;
+  }
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+}
