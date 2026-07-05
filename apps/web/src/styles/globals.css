@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------- tokens */
+
+:root {
+  color-scheme: light;
+
+  --background: #f6f4ee; /* warm paper */
+  --foreground: #1d1b16; /* warm ink */
+  --card: #fffdf7; /* fresh sheet */
+  --card-foreground: #1d1b16;
+  --muted: #ece8dd;
+  --muted-foreground: #6f6a5c;
+  --border: #dad5c6; /* hairline rule */
+  --border-strong: #1d1b16; /* ink rule (cards, buttons) */
+  --primary: #ffd21e; /* highlighter yellow */
+  --primary-foreground: #1d1b16;
+  --accent: #fdf3c8; /* soft yellow wash */
+  --accent-foreground: #4a4636;
+  --ring: #d9ae00;
+
+  --grid-dot: rgb(29 27 22 / 0.2);
+  --marker: rgb(29 27 22 / 0.4);
+
+  /* single solid offset — a sheet resting on the desk */
+  --stack: 5px 5px 0 0 var(--border-strong);
+  --stack-sm: 3px 3px 0 0 var(--border-strong);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: #12110e; /* carbon paper */
+  --foreground: #ece7da; /* bone ink */
+  --card: #1a1915;
+  --card-foreground: #ece7da;
+  --muted: #24221c;
+  --muted-foreground: #8f897a;
+  --border: #2c2a23;
+  --border-strong: #e6e0cf; /* bone rule on carbon */
+  --primary: #ffd21e;
+  --primary-foreground: #1d1b16;
+  --accent: #2a2614;
+  --accent-foreground: #e8d998;
+  --ring: #caa200;
+
+  --grid-dot: rgb(236 231 218 / 0.11);
+  --marker: rgb(236 231 218 / 0.38);
+
+  /* softened in dark so the offset doesn't glare */
+  --stack: 5px 5px 0 0 rgb(236 231 218 / 0.32);
+  --stack-sm: 3px 3px 0 0 rgb(236 231 218 / 0.32);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+
+  --font-sans: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* ---------------------------------------------------------------- base */
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* dot-grid paper, fading out toward the bottom so it never competes with content */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: radial-gradient(var(--grid-dot) 1px, transparent 1.4px);
+    background-size: 22px 22px;
+    -webkit-mask-image: radial-gradient(ellipse 110% 85% at 50% 0%, black 35%, transparent 96%);
+    mask-image: radial-gradient(ellipse 110% 85% at 50% 0%, black 35%, transparent 96%);
+  }
+
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+}
+
+/* ---------------------------------------------------------------- pieces */
+
+@layer components {
+  /* dot pin where a section rule meets the column frame */
+  .marker {
+    position: absolute;
+    z-index: 10;
+    width: 5px;
+    height: 5px;
+    border-radius: 9999px;
+    background: var(--marker);
+    pointer-events: none;
+  }
+
+  /* a sheet of paper sitting on the stack */
+  .sheet {
+    background: var(--card);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--stack);
+  }
+
+  /* page-load rise */
+  .rise {
+    animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* next card dealt onto the stack */
+  .deal {
+    animation: deal 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes deal {
+    from {
+      opacity: 0;
+      transform: translateY(7px) rotate(-0.4deg);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rise,
+    .deal {
+      animation: none;
+    }
+  }
+}
