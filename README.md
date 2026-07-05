@@ -126,7 +126,7 @@ Cue is in early development. The work is divided into phases, each independently
 | 3 | Shared spaces, per-person permissions, and secure file transfer | Planned |
 | 4 | On-device assistant | Planned |
 
-Surfaces: **web** (working) · **browser extension** (working — quick-capture popup, right-click capture, syncs as its own device) · desktop and mobile shells planned.
+Surfaces: **web** (working) · **browser extension** (working — quick-capture popup, right-click capture, syncs as its own device) · **desktop** (working — Electron shell with an Alt+Shift+C global capture hotkey) · mobile planned.
 
 ---
 
