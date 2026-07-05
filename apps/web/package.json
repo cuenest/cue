@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "@cue/engine": "workspace:*",
     "@tailwindcss/vite": "^4.3.2",
     "class-variance-authority": "^0.7.1",

@@ -311,6 +311,56 @@ function CalendarsSection() {
   );
 }
 
+function AiSection() {
+  const [key, setKey] = useState(() => localStorage.getItem('cue-ai-key') ?? '');
+  const [saved, setSaved] = useState(false);
+
+  function save() {
+    try {
+      if (key.trim()) localStorage.setItem('cue-ai-key', key.trim());
+      else localStorage.removeItem('cue-ai-key');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch {
+      /* private mode */
+    }
+  }
+
+  return (
+    <div className="mt-6">
+      <SectionHeader index="04" title="Assistant" />
+      <div className="border border-border-strong bg-card p-4 shadow-[var(--stack-sm)]">
+        <p className="text-sm text-muted-foreground">
+          The assistant uses your own Anthropic API key. It is stored only on this device and
+          never synced; requests go directly from your browser to the model. Get a key at{' '}
+          <a
+            href="https://console.anthropic.com"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            console.anthropic.com
+          </a>
+          .
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            aria-label="Anthropic API key"
+            type="password"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder="sk-ant-…"
+            className="h-9 min-w-56 flex-1 rounded-[2px] border border-border bg-transparent px-2 font-mono text-xs outline-none focus:border-border-strong"
+          />
+          <Button variant="outline" onClick={save}>
+            {saved ? 'Saved' : 'Save key'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DataSection() {
   const engine = useEngine();
 
@@ -345,6 +395,7 @@ export function SettingsView() {
       <div className="px-5 py-5 pb-8 sm:px-6">
         <SyncSection />
         <CalendarsSection />
+        <AiSection />
         <DataSection />
       </div>
     </Panel>

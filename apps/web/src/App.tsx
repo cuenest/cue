@@ -5,12 +5,13 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { ScrollProgress } from './components/ScrollProgress';
 import { QueueView } from './views/QueueView';
 import { CalendarView } from './views/CalendarView';
+import { AskView } from './views/AskView';
 import { SettingsView } from './views/SettingsView';
 import { useRoute, navigate, type Route } from './router';
 import { useSyncStatus } from './sync/manager';
 import { cn } from './lib/utils';
 
-const ROUTES: Route[] = ['queue', 'calendar', 'settings'];
+const ROUTES: Route[] = ['queue', 'calendar', 'ask', 'settings'];
 
 function Nav({ active }: { active: Route }) {
   const syncStatus = useSyncStatus();
@@ -79,6 +80,7 @@ export function App({
 
         {route === 'queue' && <QueueView />}
         {route === 'calendar' && <CalendarView />}
+        {route === 'ask' && <AskView />}
         {route === 'settings' && <SettingsView />}
 
         <Panel delay={240} className="mt-auto">
