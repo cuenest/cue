@@ -30,3 +30,8 @@ docs/superpowers/
 
 # SDD orchestration scratch — local only
 .superpowers/
+
+# Capacitor-generated copies of the web build
+apps/mobile/android/app/src/main/assets/public/
+apps/mobile/android/app/src/main/assets/capacitor.config.json
+apps/mobile/android/app/src/main/assets/capacitor.plugins.json
