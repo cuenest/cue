@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import { CueStore } from './store';
+import { CueStore, type FileEntry } from './store';
 import { inboxItems, nextInboxItem, nextBumpOrder } from './queue';
 import { parseIcsEvents, type CalendarEvent, type CalendarSource } from './calendar';
 import type { Item, ItemId } from './types';
@@ -29,6 +29,10 @@ export interface CueEngine {
   getSources(): CalendarSource[];
   /** Master calendar: imported (locked) events merged with scheduled Cue items, sorted by start. */
   getCalendarEvents(rangeStart: number, rangeEnd: number): CalendarEvent[];
+  /** Store a small file in the space document (E2E-encrypted in transit like everything else). */
+  addFile(input: { name: string; mime: string; dataB64: string }): FileEntry;
+  getFiles(): FileEntry[];
+  removeFile(id: string): void;
 }
 
 export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
@@ -43,6 +47,10 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
   });
   store.subscribeSources(() => {
     snapshot = store.getAllItems(); // fresh ref so UI snapshots invalidate on source changes too
+    listeners.forEach((l) => l());
+  });
+  store.subscribeFiles(() => {
+    snapshot = store.getAllItems(); // same trick for file changes
     listeners.forEach((l) => l());
   });
 
@@ -71,6 +79,9 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
     addSource: (input) => store.addSource(input),
     removeSource: (id) => store.removeSource(id),
     getSources: () => store.getSources(),
+    addFile: (input) => store.addFile(input),
+    getFiles: () => store.getFiles(),
+    removeFile: (id) => store.removeFile(id),
     getCalendarEvents: (rangeStart, rangeEnd) => {
       const events: CalendarEvent[] = [];
       for (const src of store.getSources()) {
@@ -99,7 +110,7 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
 }
 
 export * from './types';
-export { CueStore } from './store';
+export { CueStore, type FileEntry } from './store';
 export * as queue from './queue';
 export { parseIcsEvents } from './calendar';
 export type { CalendarEvent, CalendarSource } from './calendar';
