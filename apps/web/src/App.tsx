@@ -6,12 +6,14 @@ import { ScrollProgress } from './components/ScrollProgress';
 import { QueueView } from './views/QueueView';
 import { CalendarView } from './views/CalendarView';
 import { AskView } from './views/AskView';
+import { FilesView } from './views/FilesView';
 import { SettingsView } from './views/SettingsView';
 import { useRoute, navigate, type Route } from './router';
 import { useSyncStatus } from './sync/manager';
+import { spaceManager, useActiveSpace, PERSONAL_SPACE } from './spaces/manager';
 import { cn } from './lib/utils';
 
-const ROUTES: Route[] = ['queue', 'calendar', 'ask', 'settings'];
+const ROUTES: Route[] = ['queue', 'calendar', 'ask', 'files', 'settings'];
 
 function Nav({ active }: { active: Route }) {
   const syncStatus = useSyncStatus();
@@ -39,6 +41,26 @@ function Nav({ active }: { active: Route }) {
   );
 }
 
+function SpaceSwitcher() {
+  const { spaceId, spaces } = useActiveSpace();
+  if (spaces.length === 0) return null;
+  return (
+    <select
+      aria-label="Space"
+      value={spaceId}
+      onChange={(e) => spaceManager.setActive(e.target.value)}
+      className="max-w-32 rounded-[2px] border border-border bg-transparent px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground outline-none hover:border-border-strong hover:text-foreground"
+    >
+      <option value={PERSONAL_SPACE}>personal</option>
+      {spaces.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export function App({
   engine,
   persistent = true,
@@ -47,9 +69,11 @@ export function App({
   persistent?: boolean;
 }) {
   const route = useRoute();
+  spaceManager.init(engine);
+  const { engine: activeEngine } = useActiveSpace();
 
   return (
-    <EngineContext.Provider value={engine}>
+    <EngineContext.Provider value={activeEngine}>
       <ScrollProgress />
 
       {!persistent && (
@@ -72,6 +96,7 @@ export function App({
               />
             </h1>
             <div className="flex items-center gap-3">
+              <SpaceSwitcher />
               <Nav active={route} />
               <ThemeToggle />
             </div>
@@ -81,6 +106,7 @@ export function App({
         {route === 'queue' && <QueueView />}
         {route === 'calendar' && <CalendarView />}
         {route === 'ask' && <AskView />}
+        {route === 'files' && <FilesView />}
         {route === 'settings' && <SettingsView />}
 
         <Panel delay={240} className="mt-auto">

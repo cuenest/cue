@@ -4,6 +4,7 @@ import { generateSyncKey, makeLinkCode, parseLinkCode } from '@cue/engine';
 import { Panel } from '../components/Panel';
 import { useEngine, useItems } from '../useEngine';
 import { syncManager, useSyncStatus, DEFAULT_HUB, type SyncConfig } from '../sync/manager';
+import { spaceManager, useActiveSpace } from '../spaces/manager';
 import { Button } from '../components/ui/button';
 import { cn } from '../lib/utils';
 
@@ -311,6 +312,142 @@ function CalendarsSection() {
   );
 }
 
+function SpacesSection() {
+  const { spaces } = useActiveSpace();
+  const [name, setName] = useState('');
+  const [hub, setHub] = useState(DEFAULT_HUB);
+  const [joinName, setJoinName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [inviteFor, setInviteFor] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const invite = inviteFor
+    ? (() => {
+        const s = spaces.find((x) => x.id === inviteFor);
+        return s ? makeLinkCode({ room: s.room, key: s.key, hub: s.hub }) : null;
+      })()
+    : null;
+
+  async function create() {
+    setError(null);
+    if (!name.trim()) {
+      setError('Give the space a name first.');
+      return;
+    }
+    const s = await spaceManager.create(name, hub);
+    setName('');
+    spaceManager.setActive(s.id);
+  }
+
+  function join(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const parsed = parseLinkCode(joinCode.trim());
+    if (!parsed) {
+      setError('That space code is not valid.');
+      return;
+    }
+    const s = spaceManager.join({
+      name: joinName.trim() || 'Shared space',
+      room: parsed.room,
+      key: parsed.key,
+      hub: parsed.hub ?? DEFAULT_HUB,
+    });
+    setJoinCode('');
+    setJoinName('');
+    spaceManager.setActive(s.id);
+  }
+
+  return (
+    <div className="mt-6">
+      <SectionHeader index="05" title="Shared spaces" />
+      <div className="border border-border-strong bg-card p-4 shadow-[var(--stack-sm)]">
+        <p className="text-sm text-muted-foreground">
+          A shared space is a separate, end-to-end encrypted world — its own queue, calendar and
+          files — shared with everyone who has its invite code. Anyone with the code can read and
+          write everything in the space, so share it like a house key.
+        </p>
+
+        {spaces.length > 0 && (
+          <ul className="mt-3 border-t border-border">
+            {spaces.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-2 border-b border-border py-2">
+                <span className="min-w-0 flex-1 text-sm font-semibold">{s.name}</span>
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {spaceManager.status(s.id) ?? 'idle'}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setInviteFor(inviteFor === s.id ? null : s.id)}
+                >
+                  {inviteFor === s.id ? 'Hide invite' : 'Invite'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => spaceManager.leave(s.id)}>
+                  Leave
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {invite && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="max-w-full overflow-x-auto whitespace-nowrap border border-border bg-background px-2 py-1 font-mono text-[10px]">
+              {invite}
+            </code>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void navigator.clipboard?.writeText(invite)}
+            >
+              Copy
+            </Button>
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          <input
+            aria-label="Space name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="new space name (e.g. Family)"
+            className="h-9 w-48 rounded-[2px] border border-border bg-transparent px-2 text-sm outline-none focus:border-border-strong"
+          />
+          <input
+            aria-label="Space hub URL"
+            value={hub}
+            onChange={(e) => setHub(e.target.value)}
+            placeholder={DEFAULT_HUB}
+            className="h-9 min-w-44 flex-1 rounded-[2px] border border-border bg-transparent px-2 font-mono text-xs outline-none focus:border-border-strong"
+          />
+          <Button onClick={() => void create()}>Create space</Button>
+        </div>
+
+        <form onSubmit={join} className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            aria-label="Joined space name"
+            value={joinName}
+            onChange={(e) => setJoinName(e.target.value)}
+            placeholder="name it locally"
+            className="h-9 w-48 rounded-[2px] border border-border bg-transparent px-2 text-sm outline-none focus:border-border-strong"
+          />
+          <input
+            aria-label="Space invite code"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value)}
+            placeholder="paste a space invite code (cue1.…)"
+            className="h-9 min-w-44 flex-1 rounded-[2px] border border-border bg-transparent px-2 font-mono text-xs outline-none focus:border-border-strong"
+          />
+          <Button type="submit" variant="outline">
+            Join space
+          </Button>
+        </form>
+        {error && <p className="mt-2 font-mono text-xs text-muted-foreground">{error}</p>}
+      </div>
+    </div>
+  );
+}
+
 function AiSection() {
   const [key, setKey] = useState(() => localStorage.getItem('cue-ai-key') ?? '');
   const [saved, setSaved] = useState(false);
@@ -394,6 +531,7 @@ export function SettingsView() {
     <Panel delay={60}>
       <div className="px-5 py-5 pb-8 sm:px-6">
         <SyncSection />
+        <SpacesSection />
         <CalendarsSection />
         <AiSection />
         <DataSection />

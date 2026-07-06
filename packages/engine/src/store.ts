@@ -4,16 +4,29 @@ import type { CalendarSource } from './calendar';
 
 const ITEMS_KEY = 'items';
 const SOURCES_KEY = 'sources';
+const FILES_KEY = 'files';
+
+/** A small file stored inside the (encrypted, synced) space document. */
+export interface FileEntry {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  dataB64: string;
+  addedAt: number;
+}
 
 export class CueStore {
   readonly doc: Y.Doc;
   private readonly items: Y.Map<Y.Map<unknown>>;
   private readonly sources: Y.Map<Y.Map<unknown>>;
+  private readonly files: Y.Map<Y.Map<unknown>>;
 
   constructor(doc: Y.Doc = new Y.Doc()) {
     this.doc = doc;
     this.items = doc.getMap(ITEMS_KEY);
     this.sources = doc.getMap(SOURCES_KEY);
+    this.files = doc.getMap(FILES_KEY);
   }
 
   addItem(body: string, now: number = Date.now()): Item {
@@ -114,6 +127,52 @@ export class CueStore {
     const handler = () => listener();
     this.sources.observeDeep(handler);
     return () => this.sources.unobserveDeep(handler);
+  }
+
+  addFile(input: { name: string; mime: string; dataB64: string }): FileEntry {
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    // base64 length → decoded byte size
+    const padding = input.dataB64.endsWith('==') ? 2 : input.dataB64.endsWith('=') ? 1 : 0;
+    const size = Math.max(0, (input.dataB64.length / 4) * 3 - padding);
+    this.doc.transact(() => {
+      const ymap = new Y.Map<unknown>();
+      ymap.set('id', id);
+      ymap.set('name', input.name);
+      ymap.set('mime', input.mime);
+      ymap.set('size', size);
+      ymap.set('dataB64', input.dataB64);
+      ymap.set('addedAt', now);
+      this.files.set(id, ymap);
+    });
+    return { id, name: input.name, mime: input.mime, size, dataB64: input.dataB64, addedAt: now };
+  }
+
+  getFiles(): FileEntry[] {
+    const out: FileEntry[] = [];
+    this.files.forEach((y) => {
+      out.push({
+        id: y.get('id') as string,
+        name: y.get('name') as string,
+        mime: y.get('mime') as string,
+        size: y.get('size') as number,
+        dataB64: y.get('dataB64') as string,
+        addedAt: y.get('addedAt') as number,
+      });
+    });
+    return out.sort((a, b) => b.addedAt - a.addedAt);
+  }
+
+  removeFile(id: string): void {
+    this.doc.transact(() => {
+      this.files.delete(id);
+    });
+  }
+
+  subscribeFiles(listener: () => void): () => void {
+    const handler = () => listener();
+    this.files.observeDeep(handler);
+    return () => this.files.unobserveDeep(handler);
   }
 }
 

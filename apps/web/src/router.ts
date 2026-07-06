@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 
-export type Route = 'queue' | 'calendar' | 'ask' | 'settings';
+export type Route = 'queue' | 'calendar' | 'ask' | 'files' | 'settings';
 
 function read(): Route {
   const h = window.location.hash.replace(/^#\/?/, '');
-  return h === 'calendar' || h === 'settings' || h === 'ask' ? h : 'queue';
+  return h === 'calendar' || h === 'settings' || h === 'ask' || h === 'files' ? h : 'queue';
 }
 
 export function navigate(route: Route): void {

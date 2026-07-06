@@ -98,3 +98,27 @@ describe('requeue, edit, undo', () => {
     expect(() => engine.undo()).not.toThrow();
   });
 });
+
+describe('files', () => {
+  it('addFile/getFiles/removeFile round-trip', () => {
+    const engine = createEngine();
+    const f = engine.addFile({ name: 'note.txt', mime: 'text/plain', dataB64: 'aGVsbG8=' });
+    expect(f.name).toBe('note.txt');
+    expect(f.size).toBe(5); // "hello" is 5 bytes
+    const listed = engine.getFiles();
+    expect(listed).toHaveLength(1);
+    expect(listed[0]!.dataB64).toBe('aGVsbG8=');
+    engine.removeFile(f.id);
+    expect(engine.getFiles()).toHaveLength(0);
+  });
+
+  it('file changes notify subscribers', () => {
+    const engine = createEngine();
+    let called = 0;
+    engine.subscribe(() => {
+      called += 1;
+    });
+    engine.addFile({ name: 'a', mime: 'application/octet-stream', dataB64: 'AA==' });
+    expect(called).toBeGreaterThan(0);
+  });
+});
