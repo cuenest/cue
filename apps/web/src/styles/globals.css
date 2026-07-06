@@ -104,6 +104,13 @@
     background: var(--primary);
     color: var(--primary-foreground);
   }
+
+  /* native <select> popups can't be fully styled, but keep them on-theme */
+  select option {
+    background: var(--card);
+    color: var(--foreground);
+    font-family: var(--font-mono);
+  }
 }
 
 /* ---------------------------------------------------------------- pieces */
