@@ -45,19 +45,35 @@ function SpaceSwitcher() {
   const { spaceId, spaces } = useActiveSpace();
   if (spaces.length === 0) return null;
   return (
-    <select
-      aria-label="Space"
-      value={spaceId}
-      onChange={(e) => spaceManager.setActive(e.target.value)}
-      className="max-w-32 rounded-[2px] border border-border bg-transparent px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground outline-none hover:border-border-strong hover:text-foreground"
-    >
-      <option value={PERSONAL_SPACE}>personal</option>
-      {spaces.map((s) => (
-        <option key={s.id} value={s.id}>
-          {s.name}
-        </option>
-      ))}
-    </select>
+    <span className="relative inline-flex items-center">
+      <select
+        aria-label="Space"
+        value={spaceId}
+        onChange={(e) => spaceManager.setActive(e.target.value)}
+        className={cn(
+          'max-w-32 cursor-pointer appearance-none rounded-[2px] border bg-card py-1 pl-2 pr-6 font-mono text-[10px] uppercase tracking-[0.15em] outline-none transition-colors',
+          spaceId === PERSONAL_SPACE
+            ? 'border-border text-muted-foreground hover:border-border-strong hover:text-foreground'
+            : 'border-border-strong bg-primary font-semibold text-primary-foreground shadow-[2px_2px_0_0_var(--color-border-strong)]',
+        )}
+      >
+        <option value={PERSONAL_SPACE}>personal</option>
+        {spaces.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
+      <span
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute right-2 text-[8px]',
+          spaceId === PERSONAL_SPACE ? 'text-muted-foreground' : 'text-primary-foreground',
+        )}
+      >
+        ▼
+      </span>
+    </span>
   );
 }
 

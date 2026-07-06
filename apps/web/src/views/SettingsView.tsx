@@ -320,6 +320,7 @@ function SpacesSection() {
   const [joinCode, setJoinCode] = useState('');
   const [inviteFor, setInviteFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [inviteQr, setInviteQr] = useState<string | null>(null);
 
   const invite = inviteFor
     ? (() => {
@@ -327,6 +328,16 @@ function SpacesSection() {
         return s ? makeLinkCode({ room: s.room, key: s.key, hub: s.hub }) : null;
       })()
     : null;
+
+  useEffect(() => {
+    if (invite) {
+      QRCode.toDataURL(invite, { margin: 1, width: 220 })
+        .then(setInviteQr)
+        .catch(() => setInviteQr(null));
+    } else {
+      setInviteQr(null);
+    }
+  }, [invite]);
 
   async function create() {
     setError(null);
@@ -391,17 +402,26 @@ function SpacesSection() {
           </ul>
         )}
         {invite && (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <code className="max-w-full overflow-x-auto whitespace-nowrap border border-border bg-background px-2 py-1 font-mono text-[10px]">
-              {invite}
-            </code>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void navigator.clipboard?.writeText(invite)}
-            >
-              Copy
-            </Button>
+          <div className="mt-2">
+            <p className="mb-2 font-mono text-[11px] text-muted-foreground">
+              scan on the other device, or paste the code there — anyone with this code can read
+              and write the space
+            </p>
+            {inviteQr && (
+              <img src={inviteQr} alt="Space invite QR code" className="border border-border-strong" />
+            )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <code className="max-w-full overflow-x-auto whitespace-nowrap border border-border bg-background px-2 py-1 font-mono text-[10px]">
+                {invite}
+              </code>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void navigator.clipboard?.writeText(invite)}
+              >
+                Copy
+              </Button>
+            </div>
           </div>
         )}
 
