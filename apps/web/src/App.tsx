@@ -3,6 +3,7 @@ import { EngineContext } from './useEngine';
 import { Panel, Marker } from './components/Panel';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ScrollProgress } from './components/ScrollProgress';
+import { SpaceSwitcher } from './components/SpaceSwitcher';
 import { QueueView } from './views/QueueView';
 import { CalendarView } from './views/CalendarView';
 import { AskView } from './views/AskView';
@@ -10,7 +11,7 @@ import { FilesView } from './views/FilesView';
 import { SettingsView } from './views/SettingsView';
 import { useRoute, navigate, type Route } from './router';
 import { useSyncStatus } from './sync/manager';
-import { spaceManager, useActiveSpace, PERSONAL_SPACE } from './spaces/manager';
+import { spaceManager, useActiveSpace } from './spaces/manager';
 import { cn } from './lib/utils';
 
 const ROUTES: Route[] = ['queue', 'calendar', 'ask', 'files', 'settings'];
@@ -41,42 +42,6 @@ function Nav({ active }: { active: Route }) {
   );
 }
 
-function SpaceSwitcher() {
-  const { spaceId, spaces } = useActiveSpace();
-  if (spaces.length === 0) return null;
-  return (
-    <span className="relative inline-flex items-center">
-      <select
-        aria-label="Space"
-        value={spaceId}
-        onChange={(e) => spaceManager.setActive(e.target.value)}
-        className={cn(
-          'max-w-32 cursor-pointer appearance-none rounded-[2px] border bg-card py-1 pl-2 pr-6 font-mono text-[10px] uppercase tracking-[0.15em] outline-none transition-colors',
-          spaceId === PERSONAL_SPACE
-            ? 'border-border text-muted-foreground hover:border-border-strong hover:text-foreground'
-            : 'border-border-strong bg-primary font-semibold text-primary-foreground shadow-[2px_2px_0_0_var(--color-border-strong)]',
-        )}
-      >
-        <option value={PERSONAL_SPACE}>personal</option>
-        {spaces.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
-      </select>
-      <span
-        aria-hidden="true"
-        className={cn(
-          'pointer-events-none absolute right-2 text-[8px]',
-          spaceId === PERSONAL_SPACE ? 'text-muted-foreground' : 'text-primary-foreground',
-        )}
-      >
-        ▼
-      </span>
-    </span>
-  );
-}
-
 export function App({
   engine,
   persistent = true,
@@ -102,7 +67,7 @@ export function App({
       )}
 
       <main className="relative mx-auto flex min-h-dvh w-full max-w-2xl flex-col border-x border-border">
-        <Panel delay={0}>
+        <Panel delay={0} className="z-40">
           <header className="flex items-center justify-between gap-3 px-5 py-4 sm:px-6">
             <h1 className="flex items-baseline gap-1.5 font-sans text-2xl font-extrabold tracking-tight">
               Cue
