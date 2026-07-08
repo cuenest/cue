@@ -118,10 +118,13 @@ async function decryptChunk(info, key, hash) {
   } else {
     payload = new Uint8Array(payload);
   }
+  // Envelope: [suite:1][iv:12][ciphertext+tag]. 0x01 = AES-256-GCM.
+  // Must match encryptUpdate in packages/engine/src/sync/crypto.ts.
+  if (payload[0] !== 0x01) throw new Error('unknown crypto suite ' + payload[0]);
   const plain = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: payload.slice(0, 12) },
+    { name: 'AES-GCM', iv: payload.slice(1, 13) },
     key,
-    payload.slice(12),
+    payload.slice(13),
   );
   return new Uint8Array(plain);
 }
