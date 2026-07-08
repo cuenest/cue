@@ -1,5 +1,6 @@
 import * as Y from 'yjs';
-import { CueStore, type FileEntry } from './store';
+import { CueStore } from './store';
+import type { FileManifest } from './files';
 import { inboxItems, nextInboxItem, nextBumpOrder } from './queue';
 import { parseIcsEvents, type CalendarEvent, type CalendarSource } from './calendar';
 import type { Item, ItemId } from './types';
@@ -29,9 +30,10 @@ export interface CueEngine {
   getSources(): CalendarSource[];
   /** Master calendar: imported (locked) events merged with scheduled Cue items, sorted by start. */
   getCalendarEvents(rangeStart: number, rangeEnd: number): CalendarEvent[];
-  /** Store a small file in the space document (E2E-encrypted in transit like everything else). */
-  addFile(input: { name: string; mime: string; dataB64: string }): FileEntry;
-  getFiles(): FileEntry[];
+  /** Add a file manifest to the space doc (bytes are uploaded to the hub separately). */
+  addFileManifest(m: FileManifest): void;
+  getFileManifests(): FileManifest[];
+  setHubComplete(id: string, complete: boolean): void;
   removeFile(id: string): void;
 }
 
@@ -79,8 +81,9 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
     addSource: (input) => store.addSource(input),
     removeSource: (id) => store.removeSource(id),
     getSources: () => store.getSources(),
-    addFile: (input) => store.addFile(input),
-    getFiles: () => store.getFiles(),
+    addFileManifest: (m) => store.addFileManifest(m),
+    getFileManifests: () => store.getFileManifests(),
+    setHubComplete: (id, complete) => store.setHubComplete(id, complete),
     removeFile: (id) => store.removeFile(id),
     getCalendarEvents: (rangeStart, rangeEnd) => {
       const events: CalendarEvent[] = [];
@@ -110,10 +113,21 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
 }
 
 export * from './types';
-export { CueStore, type FileEntry } from './store';
+export { CueStore } from './store';
 export * as queue from './queue';
 export { parseIcsEvents } from './calendar';
 export type { CalendarEvent, CalendarSource } from './calendar';
+export {
+  planUpload,
+  uploadChunks,
+  downloadChunks,
+  assembleFile,
+  chunkBytes,
+  sha256,
+  DEFAULT_CHUNK_SIZE,
+  type FileManifest,
+  type BlobIO,
+} from './files';
 export { generateSyncKey, encryptUpdate, decryptUpdate } from './sync/crypto';
 export { makeLinkCode, parseLinkCode, type LinkPayload } from './sync/link';
 export { HubProvider, type SyncStatus, type HubProviderOptions } from './sync/provider';

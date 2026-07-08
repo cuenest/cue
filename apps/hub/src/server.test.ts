@@ -103,3 +103,70 @@ describe('hub relay', () => {
     }
   });
 });
+
+describe('hub blob store', () => {
+  function url(port: number, room: string, hash: string) {
+    return `http://127.0.0.1:${port}/blob/${room}/${hash}`;
+  }
+
+  it('PUT then GET returns the identical bytes', async () => {
+    hub = await createHub();
+    const bytes = new Uint8Array([1, 2, 3, 4, 5, 250, 251, 252]);
+    const put = await fetch(url(hub.port, 'r1', 'abc'), { method: 'PUT', body: bytes });
+    expect(put.status).toBe(201);
+    const got = await fetch(url(hub.port, 'r1', 'abc'));
+    expect(got.status).toBe(200);
+    const back = new Uint8Array(await got.arrayBuffer());
+    expect(Array.from(back)).toEqual(Array.from(bytes));
+  });
+
+  it('HEAD reports existence and size', async () => {
+    hub = await createHub();
+    await fetch(url(hub.port, 'r1', 'h'), { method: 'PUT', body: new Uint8Array([9, 9, 9]) });
+    const head = await fetch(url(hub.port, 'r1', 'h'), { method: 'HEAD' });
+    expect(head.status).toBe(200);
+    expect(head.headers.get('content-length')).toBe('3');
+    const missing = await fetch(url(hub.port, 'r1', 'nope'), { method: 'HEAD' });
+    expect(missing.status).toBe(404);
+  });
+
+  it('GET with a Range header returns a 206 partial slice', async () => {
+    hub = await createHub();
+    const bytes = new Uint8Array([10, 11, 12, 13, 14, 15]);
+    await fetch(url(hub.port, 'r1', 'rng'), { method: 'PUT', body: bytes });
+    const res = await fetch(url(hub.port, 'r1', 'rng'), { headers: { Range: 'bytes=2-4' } });
+    expect(res.status).toBe(206);
+    const slice = new Uint8Array(await res.arrayBuffer());
+    expect(Array.from(slice)).toEqual([12, 13, 14]);
+  });
+
+  it('PUT is idempotent by hash (second write keeps the content)', async () => {
+    hub = await createHub();
+    await fetch(url(hub.port, 'r1', 'dup'), { method: 'PUT', body: new Uint8Array([1, 1]) });
+    const second = await fetch(url(hub.port, 'r1', 'dup'), { method: 'PUT', body: new Uint8Array([1, 1]) });
+    expect([200, 201, 204]).toContain(second.status);
+    const got = await fetch(url(hub.port, 'r1', 'dup'));
+    expect(Array.from(new Uint8Array(await got.arrayBuffer()))).toEqual([1, 1]);
+  });
+
+  it('rooms are isolated — same hash, different room, is a separate blob', async () => {
+    hub = await createHub();
+    await fetch(url(hub.port, 'roomA', 'x'), { method: 'PUT', body: new Uint8Array([1]) });
+    const inB = await fetch(url(hub.port, 'roomB', 'x'), { method: 'HEAD' });
+    expect(inB.status).toBe(404);
+  });
+
+  it('persists blobs to disk across a restart when a dataDir is given', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cue-hub-blob-'));
+    try {
+      hub = await createHub({ dataDir: dir });
+      await fetch(url(hub.port, 'r1', 'durable'), { method: 'PUT', body: new Uint8Array([7, 7, 7]) });
+      await hub.close();
+      hub = await createHub({ dataDir: dir });
+      const got = await fetch(url(hub.port, 'r1', 'durable'));
+      expect(Array.from(new Uint8Array(await got.arrayBuffer()))).toEqual([7, 7, 7]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

@@ -8,7 +8,7 @@ import {
   type CueEngine,
   type SyncStatus,
 } from '@cue/engine';
-import { DEFAULT_HUB } from '../sync/manager';
+import { DEFAULT_HUB, syncManager } from '../sync/manager';
 
 /**
  * Shared spaces (Phase 3 MVP): each space is its own Yjs document, hub room and
@@ -131,6 +131,17 @@ class SpaceManager {
   status(id: string): SyncStatus | null {
     if (id === PERSONAL_SPACE) return null;
     return this.live.get(id)?.status ?? 'offline';
+  }
+
+  /** Hub/room/key for the active space — needed to upload/download file chunks. Null if none. */
+  activeTransport(): { hub: string; room: string; key: string } | null {
+    const id = this.activeId();
+    if (id === PERSONAL_SPACE) {
+      const cfg = syncManager.getConfig();
+      return cfg ? { hub: cfg.hub, room: cfg.room, key: cfg.key } : null;
+    }
+    const s = this.list().find((x) => x.id === id);
+    return s ? { hub: s.hub, room: s.room, key: s.key } : null;
   }
 
   onChange(listener: () => void): () => void {
