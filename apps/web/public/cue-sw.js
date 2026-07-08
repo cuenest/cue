@@ -1,20 +1,80 @@
 /*
- * Cue file-streaming Service Worker.
+ * Cue Service Worker — two jobs in one worker (a page can only have one).
  *
- * Intercepts requests to /cue-file/:id and serves the decrypted file by pulling
- * only the encrypted chunks it needs from the hub, decrypting them in the worker,
- * and honouring HTTP Range. This lets <video>/<audio>/<img> play or preview a
- * file straight from the hub — the file is never fully downloaded, and only the
- * requested byte range's chunks are fetched. The hub only ever serves ciphertext.
+ * 1. App shell / PWA: precache the shell on install and serve it offline, so
+ *    Cue launches with no network. The app is local-first (its data lives in
+ *    IndexedDB), so once the shell loads it's fully usable offline.
+ *      - navigations  → network-first, fall back to the cached shell
+ *      - /assets/*    → cache-first (Vite hashes these, so they're immutable)
+ *      - dev modules  → left untouched, so Vite HMR keeps working in dev
  *
- * The page tells the worker how to fetch a file by postMessage before setting the
- * element's src; the worker keeps that map in memory.
+ * 2. File streaming: intercept /cue-file/:id and serve the decrypted file by
+ *    pulling only the encrypted chunks it needs (local cache first, then the
+ *    hub), decrypting in the worker, honouring HTTP Range. The file is never
+ *    fully downloaded and the hub only ever serves ciphertext. The page hands
+ *    the worker fetch info by postMessage (also persisted to IndexedDB so it
+ *    survives the worker being recycled).
  */
+
+const APP_CACHE = 'cue-app-v1';
+// Static, non-hashed shell files worth caching by path (icons, manifest).
+const APP_SHELL_STATIC = new Set([
+  '/manifest.webmanifest',
+  '/icon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/apple-touch-icon.png',
+  '/favicon.png',
+]);
 
 const files = new Map(); // id -> { httpHub, room, key, chunkHashes, chunkSize, size, mime }
 
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('install', (e) => {
+  self.skipWaiting();
+  // Best-effort precache: cache each entry on its own so one 404 (e.g. in dev)
+  // doesn't abort the whole batch.
+  e.waitUntil(
+    caches.open(APP_CACHE).then((cache) =>
+      Promise.allSettled(['/', ...APP_SHELL_STATIC].map((u) => cache.add(u))),
+    ),
+  );
+});
+
+self.addEventListener('activate', (e) =>
+  e.waitUntil(
+    (async () => {
+      // Drop caches from older SW versions.
+      const names = await caches.keys();
+      await Promise.all(names.map((n) => (n !== APP_CACHE ? caches.delete(n) : null)));
+      await self.clients.claim();
+    })(),
+  ),
+);
+
+// network-first: keep the shell fresh online, fall back to cache offline
+async function serveShell(req) {
+  const cache = await caches.open(APP_CACHE);
+  try {
+    const fresh = await fetch(req);
+    cache.put('/', fresh.clone()); // hash routing → every navigation is path "/"
+    return fresh;
+  } catch {
+    return (await cache.match('/')) || new Response('offline', { status: 503 });
+  }
+}
+
+// cache-first with background revalidate: instant for immutable hashed assets
+async function serveAsset(req) {
+  const cache = await caches.open(APP_CACHE);
+  const cached = await cache.match(req);
+  const network = fetch(req)
+    .then((res) => {
+      if (res && res.status === 200 && res.type === 'basic') cache.put(req, res.clone());
+      return res;
+    })
+    .catch(() => null);
+  return cached || (await network) || new Response('offline', { status: 503 });
+}
 
 self.addEventListener('message', (event) => {
   const d = event.data;
@@ -149,9 +209,29 @@ async function serve(request, id) {
 }
 
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  const req = event.request;
+  const url = new URL(req.url);
+  // Cross-origin (hub blobs, Google Fonts) is left to the browser.
   if (url.origin !== self.location.origin) return;
+
+  // 1) virtual file streaming
   const m = /^\/cue-file\/(.+)$/.exec(url.pathname);
-  if (!m) return;
-  event.respondWith(serve(event.request, decodeURIComponent(m[1])));
+  if (m) {
+    event.respondWith(serve(req, decodeURIComponent(m[1])));
+    return;
+  }
+
+  if (req.method !== 'GET') return;
+
+  // 2) page navigations → app shell (offline launch)
+  if (req.mode === 'navigate') {
+    event.respondWith(serveShell(req));
+    return;
+  }
+
+  // 3) built assets + static icons → cache-first. Dev module requests
+  //    (/src/*, /@vite/*, /node_modules/*) fall through untouched for HMR.
+  if (url.pathname.startsWith('/assets/') || APP_SHELL_STATIC.has(url.pathname)) {
+    event.respondWith(serveAsset(req));
+  }
 });
