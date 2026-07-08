@@ -41,6 +41,28 @@ export async function preparePreview(
     size: manifest.size,
     mime: manifest.mime,
   };
+  await saveInfo(manifest.id, info); // durable: survives the SW being recycled while idle
   ready.active?.postMessage({ type: 'cue-file', id: manifest.id, info });
   return `/cue-file/${encodeURIComponent(manifest.id)}`;
+}
+
+/** Persist file info so the worker can rebuild it after a restart (SW memory is ephemeral). */
+function saveInfo(id: string, info: unknown): Promise<void> {
+  return new Promise((resolve) => {
+    const r = indexedDB.open('cue-fileinfo', 1);
+    r.onupgradeneeded = () => {
+      if (!r.result.objectStoreNames.contains('info')) r.result.createObjectStore('info');
+    };
+    r.onsuccess = () => {
+      try {
+        const t = r.result.transaction('info', 'readwrite');
+        t.objectStore('info').put(info, id);
+        t.oncomplete = () => resolve();
+        t.onerror = () => resolve();
+      } catch {
+        resolve();
+      }
+    };
+    r.onerror = () => resolve();
+  });
 }

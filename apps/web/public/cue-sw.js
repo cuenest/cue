@@ -29,10 +29,35 @@ function fromB64url(s) {
   return o;
 }
 
+// read a chunk's ciphertext from the local cache (IndexedDB), else the hub
+function localGet(hash) {
+  return new Promise((resolve) => {
+    const r = indexedDB.open('cue-blobs', 1);
+    r.onupgradeneeded = () => {
+      if (!r.result.objectStoreNames.contains('chunks')) r.result.createObjectStore('chunks');
+    };
+    r.onsuccess = () => {
+      try {
+        const g = r.result.transaction('chunks').objectStore('chunks').get(hash);
+        g.onsuccess = () => resolve(g.result || null);
+        g.onerror = () => resolve(null);
+      } catch {
+        resolve(null);
+      }
+    };
+    r.onerror = () => resolve(null);
+  });
+}
+
 async function decryptChunk(info, key, hash) {
-  const res = await fetch(`${info.httpHub}/blob/${info.room}/${hash}`);
-  if (!res.ok) throw new Error('blob ' + res.status);
-  const payload = new Uint8Array(await res.arrayBuffer());
+  let payload = await localGet(hash);
+  if (!payload) {
+    const res = await fetch(`${info.httpHub}/blob/${info.room}/${hash}`);
+    if (!res.ok) throw new Error('blob ' + res.status);
+    payload = new Uint8Array(await res.arrayBuffer());
+  } else {
+    payload = new Uint8Array(payload);
+  }
   const plain = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: payload.slice(0, 12) },
     key,
@@ -41,8 +66,32 @@ async function decryptChunk(info, key, hash) {
   return new Uint8Array(plain);
 }
 
+// file info persisted by the page (survives this worker being recycled)
+function loadInfo(id) {
+  return new Promise((resolve) => {
+    const r = indexedDB.open('cue-fileinfo', 1);
+    r.onupgradeneeded = () => {
+      if (!r.result.objectStoreNames.contains('info')) r.result.createObjectStore('info');
+    };
+    r.onsuccess = () => {
+      try {
+        const g = r.result.transaction('info').objectStore('info').get(id);
+        g.onsuccess = () => resolve(g.result || null);
+        g.onerror = () => resolve(null);
+      } catch {
+        resolve(null);
+      }
+    };
+    r.onerror = () => resolve(null);
+  });
+}
+
 async function serve(request, id) {
-  const info = files.get(id);
+  let info = files.get(id);
+  if (!info) {
+    info = await loadInfo(id); // rebuild from IndexedDB if the worker was restarted
+    if (info) files.set(id, info);
+  }
   if (!info) return new Response('unknown file', { status: 404 });
 
   const key = await crypto.subtle.importKey('raw', fromB64url(info.key), { name: 'AES-GCM' }, false, [

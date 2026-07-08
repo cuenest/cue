@@ -5,7 +5,15 @@ import { Button } from '../components/ui/button';
 import { useEngine, useItems } from '../useEngine';
 import { navigate } from '../router';
 import { spaceManager } from '../spaces/manager';
-import { hubBlobIO, hashFileChunks, uploadFileChunks } from '../files/transfer';
+import {
+  hubBlobIO,
+  hashFileChunks,
+  uploadFileChunks,
+  localFirstIO,
+  pinFile,
+  unpinFile,
+} from '../files/transfer';
+import { pinnedIds } from '../files/localStore';
 import { previewKind, preparePreview, type PreviewKind } from '../files/preview';
 import { cn } from '../lib/utils';
 import { timeAgo } from '../lib/time';
@@ -29,6 +37,8 @@ export function FilesView() {
   const [preview, setPreview] = useState<{ url: string; kind: PreviewKind; name: string } | null>(
     null,
   );
+  const [pinned, setPinnedState] = useState<Set<string>>(() => pinnedIds());
+  const [pinning, setPinning] = useState<string | null>(null);
 
   // no hub for the active space → can't move bytes
   if (!transport) {
@@ -86,10 +96,28 @@ export function FilesView() {
     }
   }
 
+  async function togglePin(m: FileManifest) {
+    setError(null);
+    try {
+      if (pinned.has(m.id)) {
+        await unpinFile(m);
+      } else {
+        setPinning(m.id);
+        await pinFile(m, io);
+      }
+      setPinnedState(pinnedIds());
+    } catch {
+      setError('Could not update offline copy — the hub may be offline.');
+    } finally {
+      setPinning(null);
+    }
+  }
+
   async function download(m: FileManifest) {
     setError(null);
     try {
-      const bytes = await assembleFile(m, key, io); // fetch + decrypt + verify chunks
+      // local-first: a pinned file downloads even with the hub offline
+      const bytes = await assembleFile(m, key, localFirstIO(io)); // fetch + decrypt + verify chunks
       const blob = new Blob([bytes as BlobPart], { type: m.mime });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -184,7 +212,7 @@ export function FilesView() {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={!f.hubComplete}
+                    disabled={!f.hubComplete && !pinned.has(f.id)}
                     onClick={() => void openPreview(f)}
                   >
                     Preview
@@ -193,10 +221,19 @@ export function FilesView() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!f.hubComplete}
+                  disabled={!f.hubComplete && !pinned.has(f.id)}
                   onClick={() => void download(f)}
                 >
                   Download
+                </Button>
+                <Button
+                  size="sm"
+                  variant={pinned.has(f.id) ? 'default' : 'ghost'}
+                  disabled={(!f.hubComplete && !pinned.has(f.id)) || pinning === f.id}
+                  onClick={() => void togglePin(f)}
+                  title="Keep a copy on this device so it works offline"
+                >
+                  {pinning === f.id ? 'Saving…' : pinned.has(f.id) ? 'Offline ✓' : 'Keep offline'}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => engine.removeFile(f.id)}>
                   Remove
