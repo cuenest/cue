@@ -1,9 +1,27 @@
 /**
- * Zero-knowledge transport crypto: Yjs updates are AES-256-GCM encrypted with a
- * shared sync key before leaving the device. Relays only ever see ciphertext.
- * Uses WebCrypto, which exists in both browsers and Node.
+ * Zero-knowledge transport crypto: Yjs updates and file chunks are AES-256-GCM
+ * encrypted with a shared sync key before leaving the device. Relays only ever
+ * see ciphertext. Uses WebCrypto, which exists in both browsers and Node.
+ *
+ * Crypto agility (post-quantum readiness): every ciphertext is self-describing —
+ * its first byte names the suite that produced it. Decryption dispatches on that
+ * byte, so a new suite (e.g. a post-quantum-derived AEAD) can be added later and
+ * coexist with existing data, no migration required. AES-256 itself is already
+ * quantum-resistant (Grover only halves its strength → ~128-bit), so the value
+ * here is the *format*, not an urgent algorithm change. See the PQC design note
+ * in docs/superpowers/specs for the full strategy.
+ *
+ * Envelope layout: [suite:1][iv:12][ciphertext+tag].
  */
 
+/** Registry of AEAD suites. The byte value is wire-stable; never reuse a value. */
+export const CRYPTO_SUITE = {
+  /** AES-256-GCM with a 12-byte IV — the founding suite. */
+  AES_256_GCM: 0x01,
+} as const;
+
+const CURRENT_SUITE = CRYPTO_SUITE.AES_256_GCM;
+const SUITE_LENGTH = 1;
 const IV_LENGTH = 12;
 
 function toBase64Url(bytes: Uint8Array): string {
@@ -37,7 +55,7 @@ async function importKey(keyB64: string) {
   ]);
 }
 
-/** Returns IV (12 bytes) followed by ciphertext+tag. */
+/** Returns [suite:1][iv:12][ciphertext+tag]. */
 export async function encryptUpdate(keyB64: string, update: Uint8Array): Promise<Uint8Array> {
   const key = await importKey(keyB64);
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
@@ -46,16 +64,21 @@ export async function encryptUpdate(keyB64: string, update: Uint8Array): Promise
     key,
     update as unknown as Bytes,
   );
-  const out = new Uint8Array(IV_LENGTH + cipher.byteLength);
-  out.set(iv, 0);
-  out.set(new Uint8Array(cipher), IV_LENGTH);
+  const out = new Uint8Array(SUITE_LENGTH + IV_LENGTH + cipher.byteLength);
+  out[0] = CURRENT_SUITE;
+  out.set(iv, SUITE_LENGTH);
+  out.set(new Uint8Array(cipher), SUITE_LENGTH + IV_LENGTH);
   return out;
 }
 
 export async function decryptUpdate(keyB64: string, payload: Uint8Array): Promise<Uint8Array> {
+  const suite = payload[0];
+  if (suite !== CRYPTO_SUITE.AES_256_GCM) {
+    throw new Error(`unknown crypto suite 0x${(suite ?? 0).toString(16).padStart(2, '0')}`);
+  }
   const key = await importKey(keyB64);
-  const iv = payload.slice(0, IV_LENGTH);
-  const cipher = payload.slice(IV_LENGTH);
+  const iv = payload.slice(SUITE_LENGTH, SUITE_LENGTH + IV_LENGTH);
+  const cipher = payload.slice(SUITE_LENGTH + IV_LENGTH);
   const plain = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: iv as unknown as Bytes },
     key,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateSyncKey, encryptUpdate, decryptUpdate } from './crypto';
+import { generateSyncKey, encryptUpdate, decryptUpdate, CRYPTO_SUITE } from './crypto';
 
 describe('sync crypto', () => {
   it('generateSyncKey returns distinct base64url keys', async () => {
@@ -36,5 +36,19 @@ describe('sync crypto', () => {
   it('wrong key is rejected', async () => {
     const cipher = await encryptUpdate(await generateSyncKey(), new Uint8Array([1]));
     await expect(decryptUpdate(await generateSyncKey(), cipher)).rejects.toThrow();
+  });
+
+  it('tags the ciphertext with a self-describing suite byte', async () => {
+    const cipher = await encryptUpdate(await generateSyncKey(), new Uint8Array([1, 2, 3]));
+    expect(cipher[0]).toBe(CRYPTO_SUITE.AES_256_GCM);
+    // suite(1) + iv(12) + at least the GCM tag(16)
+    expect(cipher.length).toBeGreaterThanOrEqual(1 + 12 + 16);
+  });
+
+  it('rejects an unknown crypto suite (agility guard)', async () => {
+    const key = await generateSyncKey();
+    const cipher = await encryptUpdate(key, new Uint8Array([1, 2, 3]));
+    cipher[0] = 0x7f; // pretend it was produced by some future/unknown suite
+    await expect(decryptUpdate(key, cipher)).rejects.toThrow(/unknown crypto suite 0x7f/);
   });
 });
