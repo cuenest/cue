@@ -9,7 +9,17 @@ export interface SyncConfig {
 }
 
 const STORAGE_KEY = 'cue-sync';
-export const DEFAULT_HUB = 'ws://localhost:4444';
+
+// Configurable at build time (VITE_DEFAULT_HUB) so a deployed app points at a
+// real hub; falls back to the local dev hub. A bare host (no scheme) is treated
+// as a secure ws:// endpoint — that's what Render's `fromService` host injection
+// provides, and it survives Render appending a suffix to the subdomain. Users
+// can still override the hub per-space in Settings; this is only the default.
+function resolveDefaultHub(v: string | undefined): string {
+  if (!v) return 'ws://localhost:4444';
+  return /^wss?:\/\//.test(v) ? v : `wss://${v}`;
+}
+export const DEFAULT_HUB = resolveDefaultHub(import.meta.env.VITE_DEFAULT_HUB);
 
 class SyncManager {
   private doc: Y.Doc | null = null;
