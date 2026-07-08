@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { queue, type Item } from '@cue/engine';
 import { useEngine, useItems } from '../useEngine';
 import { formatDue, timeAgo, toDatetimeLocal } from '../lib/time';
+import { useDueNotifications, notificationPermission, requestNotifications } from '../lib/notify';
 import { Button } from './ui/button';
 
 /** The one item being processed. Keyed by item id so state and animation reset per item. */
@@ -104,6 +105,9 @@ export function Focus() {
     return () => clearInterval(t);
   }, []);
 
+  useDueNotifications(items, now);
+  const [perm, setPerm] = useState(notificationPermission());
+
   const dueItems = useMemo(
     () =>
       items
@@ -134,6 +138,16 @@ export function Focus() {
           </button>
         </div>
       </div>
+
+      {dueItems.length > 0 && perm === 'default' && (
+        <button
+          type="button"
+          onClick={() => void requestNotifications().then(setPerm)}
+          className="mb-3 w-full border border-dashed border-border px-3 py-2 text-left font-mono text-[11px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
+        >
+          enable reminders → get a notification when an item comes due
+        </button>
+      )}
 
       {dueItems.length > 0 && (
         <div className="mb-3 border border-border-strong bg-accent shadow-[var(--stack-sm)]">
