@@ -5,6 +5,9 @@ import { IndexeddbPersistence } from 'y-indexeddb';
 import { createEngine } from '@cue/engine';
 import { App } from './App';
 import { syncManager } from './sync/manager';
+import { registerFileWorker } from './files/preview';
+
+void registerFileWorker(); // enables streaming file previews
 
 const doc = new Y.Doc();
 const persistent = typeof indexedDB !== 'undefined';

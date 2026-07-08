@@ -6,6 +6,7 @@ import { useEngine, useItems } from '../useEngine';
 import { navigate } from '../router';
 import { spaceManager } from '../spaces/manager';
 import { hubBlobIO, hashFileChunks, uploadFileChunks } from '../files/transfer';
+import { previewKind, preparePreview, type PreviewKind } from '../files/preview';
 import { cn } from '../lib/utils';
 import { timeAgo } from '../lib/time';
 
@@ -25,6 +26,9 @@ export function FilesView() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<{ id: string; pct: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ url: string; kind: PreviewKind; name: string } | null>(
+    null,
+  );
 
   // no hub for the active space → can't move bytes
   if (!transport) {
@@ -97,6 +101,18 @@ export function FilesView() {
     }
   }
 
+  async function openPreview(m: FileManifest) {
+    setError(null);
+    const kind = previewKind(m.mime);
+    if (!kind || !transport) return;
+    try {
+      const url = await preparePreview(m, transport);
+      setPreview({ url, kind, name: m.name });
+    } catch {
+      setError('Could not open a preview — the hub may be offline.');
+    }
+  }
+
   function statusLabel(m: FileManifest): string {
     if (progress && progress.id === m.id) return `uploading ${progress.pct}%`;
     return m.hubComplete ? 'available' : 'on this device only';
@@ -164,6 +180,16 @@ export function FilesView() {
                 <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
                   {fmtSize(f.size)} · {timeAgo(f.addedAt)}
                 </span>
+                {previewKind(f.mime) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!f.hubComplete}
+                    onClick={() => void openPreview(f)}
+                  >
+                    Preview
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -180,6 +206,45 @@ export function FilesView() {
           </ul>
         )}
       </div>
+
+      {preview && (
+        <div
+          role="dialog"
+          aria-label={`Preview ${preview.name}`}
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/90 p-4"
+          onClick={() => setPreview(null)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-3xl flex-col border border-border-strong bg-card shadow-[var(--stack)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-border px-4 py-2">
+              <span className="truncate font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                {preview.name} · streaming from hub
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreview(null)}
+                className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+              >
+                close ✕
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-background p-2">
+              {preview.kind === 'image' && (
+                <img src={preview.url} alt={preview.name} className="max-h-full max-w-full object-contain" />
+              )}
+              {preview.kind === 'video' && (
+                <video src={preview.url} controls autoPlay className="max-h-full max-w-full" />
+              )}
+              {preview.kind === 'audio' && <audio src={preview.url} controls autoPlay className="w-full" />}
+              {preview.kind === 'pdf' && (
+                <iframe src={preview.url} title={preview.name} className="h-[75vh] w-full border-0" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Panel>
   );
 }
