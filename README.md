@@ -114,6 +114,40 @@ The engine is composed of pure logic over a replicated document and is tested di
 
 ---
 
+## Deploy
+
+Cue is two deployable pieces: a **sync hub** (a small Node service that relays and
+stores *ciphertext only*) and the **web app** (a static site). They are wired
+together by [`render.yaml`](render.yaml) as a one-click Render blueprint, but
+nothing is Render-specific — the hub is a plain Node process and the web app is
+static files.
+
+**One-click (Render):** push the repo, then create a new **Blueprint** pointing at
+it. It provisions `cue-hub` (web service) and `cue-web` (static site), and injects
+the hub's public host into the web build as the default sync target.
+
+**Manual / self-host:**
+
+```bash
+# 1. Run a hub anywhere Node runs (VPS, Raspberry Pi, always-on desktop)
+PORT=4444 CUE_HUB_DATA=./data pnpm --filter @cue/hub start
+
+# 2. Build the web app pointed at that hub, then serve apps/web/dist statically
+VITE_DEFAULT_HUB=wss://your-hub.example.com pnpm --filter @cue/web build
+```
+
+`VITE_DEFAULT_HUB` accepts a full `ws(s)://` URL or a bare host (treated as
+`wss://`). It only sets the **default** shown when creating a space — every space
+can override its hub in Settings, so one build can talk to many hubs.
+
+**Durability:** on Render's free tier the hub disk is ephemeral, so rooms and file
+blobs are wiped on redeploy. This is usually fine — every device keeps a full
+local replica and re-pushes on reconnect; only unpinned files with no online
+holder can be lost. For durable storage, attach a persistent disk (the block is
+pre-written and commented in `render.yaml`).
+
+---
+
 ## Project status and roadmap
 
 Cue is in early development. The work is divided into phases, each independently usable.

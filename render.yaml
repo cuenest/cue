@@ -1,0 +1,53 @@
+# Render blueprint for Cue: a sync hub (Node web service) + the web app (static site).
+# Deploy: push this repo, then "New > Blueprint" in Render and point it here.
+#
+# Zero-knowledge holds end to end: the hub only ever relays/stores ciphertext.
+# Both services run on Render's free tier. See the durability note on the hub.
+services:
+  # ---- Sync hub -------------------------------------------------------------
+  # Relays encrypted Yjs updates over WebSocket and stores encrypted file
+  # chunks over HTTP (same port). Reads PORT (set by Render) and CUE_HUB_DATA.
+  - type: web
+    name: cue-hub
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm --filter @cue/hub start
+    envVars:
+      - key: CUE_HUB_DATA
+        value: /var/data/cue-hub
+    # Durability: the free tier has an EPHEMERAL disk — rooms and file blobs are
+    # wiped on every deploy/restart. That's usually fine, because every device
+    # keeps a full local replica and re-pushes on reconnect; only unpinned files
+    # with no online holder can be lost. For durable storage, move this service
+    # to a paid instance and uncomment the disk below (mountPath must contain
+    # CUE_HUB_DATA above):
+    # disk:
+    #   name: cue-hub-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+
+  # ---- Web app --------------------------------------------------------------
+  # Static SPA. Built with the hub's public host injected as the default sync
+  # target; the app prefixes wss:// (see resolveDefaultHub in sync/manager.ts).
+  - type: web
+    name: cue-web
+    runtime: static
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @cue/web build
+    staticPublishPath: apps/web/dist
+    envVars:
+      - key: VITE_DEFAULT_HUB
+        fromService:
+          type: web
+          name: cue-hub
+          property: host
+    routes:
+      # SPA + hash-router fallback: serve index.html for any unknown path.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # The service worker must be allowed to control the whole origin.
+      - path: /cue-sw.js
+        name: Service-Worker-Allowed
+        value: /
