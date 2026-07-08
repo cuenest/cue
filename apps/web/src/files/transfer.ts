@@ -1,4 +1,12 @@
-import { sha256, encryptUpdate, DEFAULT_CHUNK_SIZE, type BlobIO } from '@cue/engine';
+import {
+  sha256,
+  encryptUpdate,
+  decryptUpdate,
+  DEFAULT_CHUNK_SIZE,
+  type BlobIO,
+  type FileManifest,
+} from '@cue/engine';
+import { localChunks, setPinned } from './localStore';
 
 /** A BlobIO backed by the hub's HTTP blob store. Converts the ws:// hub URL to http://. */
 export function hubBlobIO(hubWsUrl: string, room: string): BlobIO {
@@ -59,4 +67,66 @@ export async function uploadFileChunks(
     }
     onProgress?.(i + 1, hashes.length);
   }
+}
+
+/**
+ * Read-through BlobIO: serves chunks from the local cache first, falling back to
+ * the hub. Used for download/preview so pinned files keep working when the hub is
+ * offline. Writes still go to the hub.
+ */
+export function localFirstIO(hub: BlobIO): BlobIO {
+  return {
+    async has(hash) {
+      return (await localChunks.has(hash)) || hub.has(hash);
+    },
+    async get(hash) {
+      const cached = await localChunks.get(hash);
+      if (cached) return cached;
+      return hub.get(hash);
+    },
+    put: hub.put,
+  };
+}
+
+/** "Keep offline": download every chunk from the hub into the local cache. */
+export async function pinFile(
+  manifest: FileManifest,
+  hub: BlobIO,
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
+  const total = manifest.chunkHashes.length;
+  for (let i = 0; i < total; i++) {
+    const hash = manifest.chunkHashes[i]!;
+    if (!(await localChunks.has(hash))) {
+      await localChunks.put(hash, await hub.get(hash));
+    }
+    onProgress?.(i + 1, total);
+  }
+  setPinned(manifest.id, true);
+}
+
+export async function unpinFile(manifest: FileManifest): Promise<void> {
+  for (const hash of manifest.chunkHashes) await localChunks.del(hash);
+  setPinned(manifest.id, false);
+}
+
+/**
+ * "Send a copy": assemble the plaintext file from local cache / hub for the user
+ * to hand off over any channel (AirDrop, USB, chat). Returns the decrypted bytes.
+ */
+export async function assemblePlaintext(
+  manifest: FileManifest,
+  key: string,
+  io: BlobIO,
+): Promise<Uint8Array> {
+  const out = new Uint8Array(manifest.size);
+  let offset = 0;
+  for (const hash of manifest.chunkHashes) {
+    const cipher = await io.get(hash);
+    const plain = await decryptUpdate(key, cipher);
+    if ((await sha256(plain)) !== hash) throw new Error('chunk hash mismatch');
+    out.set(plain, offset);
+    offset += plain.length;
+  }
+  return out;
 }
