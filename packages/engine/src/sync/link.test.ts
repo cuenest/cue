@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { makeLinkCode, parseLinkCode } from './link';
+import { makeLinkCode, parseLinkCode, normalizeHubUrl } from './link';
 
 describe('link codes', () => {
   it('round-trips room, key and hub url', () => {
@@ -17,5 +17,20 @@ describe('link codes', () => {
   it('returns null for garbage', () => {
     expect(parseLinkCode('definitely not a code')).toBeNull();
     expect(parseLinkCode('')).toBeNull();
+  });
+});
+
+describe('normalizeHubUrl', () => {
+  it('treats a bare host as a secure wss endpoint', () => {
+    expect(normalizeHubUrl('cue-hub.onrender.com')).toBe('wss://cue-hub.onrender.com');
+  });
+
+  it('leaves an explicit scheme untouched', () => {
+    expect(normalizeHubUrl('ws://localhost:4444')).toBe('ws://localhost:4444');
+    expect(normalizeHubUrl('wss://hub.example.com')).toBe('wss://hub.example.com');
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(normalizeHubUrl('  hub.example.com  ')).toBe('wss://hub.example.com');
   });
 });

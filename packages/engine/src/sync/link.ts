@@ -25,6 +25,16 @@ export function makeLinkCode(input: { room: string; key: string; hub?: string })
   return PREFIX + b64;
 }
 
+/**
+ * Normalize a hub value that may come from build config or a user field.
+ * A value with a scheme is returned as-is; a bare host is treated as a secure
+ * `wss://` endpoint (that's what host-only deploy injection provides).
+ */
+export function normalizeHubUrl(value: string): string {
+  const v = value.trim();
+  return /^wss?:\/\//.test(v) ? v : `wss://${v}`;
+}
+
 export function parseLinkCode(code: string): LinkPayload | null {
   try {
     if (!code.startsWith(PREFIX)) return null;

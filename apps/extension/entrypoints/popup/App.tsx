@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
-import { queue, parseLinkCode, type CueEngine, type SyncStatus } from '@cue/engine';
+import { queue, parseLinkCode, normalizeHubUrl, type CueEngine, type SyncStatus } from '@cue/engine';
 import { getSyncConfig, setSyncConfig, onSyncStatus } from './main';
 
 const APP_URL_KEY = 'cue-app-url';
-const DEFAULT_APP_URL = 'http://localhost:5178';
+// Both configurable at build time so a published extension points at the
+// deployed app/hub; fall back to the local dev servers otherwise.
+const DEFAULT_APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5178';
+const DEFAULT_HUB = import.meta.env.VITE_DEFAULT_HUB
+  ? normalizeHubUrl(import.meta.env.VITE_DEFAULT_HUB)
+  : 'ws://localhost:4444';
 
 function useItems(engine: CueEngine) {
   return useSyncExternalStore(engine.subscribe, engine.getItems, engine.getItems);
@@ -48,7 +53,7 @@ export function PopupApp({ engine }: { engine: CueEngine }) {
       setJoinError('Invalid link code');
       return;
     }
-    setSyncConfig({ room: parsed.room, key: parsed.key, hub: parsed.hub ?? 'ws://localhost:4444' });
+    setSyncConfig({ room: parsed.room, key: parsed.key, hub: parsed.hub ?? DEFAULT_HUB });
     setJoinCode('');
     setJoinError(null);
   }

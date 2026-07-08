@@ -146,6 +146,12 @@ local replica and re-pushes on reconnect; only unpinned files with no online
 holder can be lost. For durable storage, attach a persistent disk (the block is
 pre-written and commented in `render.yaml`).
 
+**Other surfaces** inherit the same hub. The **desktop** app bundles the web
+build, so building the web app with `VITE_DEFAULT_HUB` set before packaging is
+enough. The **browser extension** takes `VITE_DEFAULT_HUB` (fallback hub, since a
+pasted link code's hub always wins) and `VITE_APP_URL` (where "open cue →" points)
+at build time — see [`apps/extension/.env.example`](apps/extension/.env.example).
+
 ---
 
 ## Project status and roadmap

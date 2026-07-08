@@ -129,5 +129,5 @@ export {
   type BlobIO,
 } from './files';
 export { generateSyncKey, encryptUpdate, decryptUpdate } from './sync/crypto';
-export { makeLinkCode, parseLinkCode, type LinkPayload } from './sync/link';
+export { makeLinkCode, parseLinkCode, normalizeHubUrl, type LinkPayload } from './sync/link';
 export { HubProvider, type SyncStatus, type HubProviderOptions } from './sync/provider';
