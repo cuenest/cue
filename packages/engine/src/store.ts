@@ -1,20 +1,11 @@
 import * as Y from 'yjs';
 import type { Item, ItemId, ItemStatus } from './types';
 import type { CalendarSource } from './calendar';
+import type { FileManifest } from './files';
 
 const ITEMS_KEY = 'items';
 const SOURCES_KEY = 'sources';
 const FILES_KEY = 'files';
-
-/** A small file stored inside the (encrypted, synced) space document. */
-export interface FileEntry {
-  id: string;
-  name: string;
-  mime: string;
-  size: number;
-  dataB64: string;
-  addedAt: number;
-}
 
 export class CueStore {
   readonly doc: Y.Doc;
@@ -129,38 +120,43 @@ export class CueStore {
     return () => this.sources.unobserveDeep(handler);
   }
 
-  addFile(input: { name: string; mime: string; dataB64: string }): FileEntry {
-    const id = crypto.randomUUID();
-    const now = Date.now();
-    // base64 length → decoded byte size
-    const padding = input.dataB64.endsWith('==') ? 2 : input.dataB64.endsWith('=') ? 1 : 0;
-    const size = Math.max(0, (input.dataB64.length / 4) * 3 - padding);
+  /** Store a file manifest in the doc (the bytes live on the hub, not here). */
+  addFileManifest(m: FileManifest): void {
     this.doc.transact(() => {
       const ymap = new Y.Map<unknown>();
-      ymap.set('id', id);
-      ymap.set('name', input.name);
-      ymap.set('mime', input.mime);
-      ymap.set('size', size);
-      ymap.set('dataB64', input.dataB64);
-      ymap.set('addedAt', now);
-      this.files.set(id, ymap);
+      ymap.set('id', m.id);
+      ymap.set('name', m.name);
+      ymap.set('mime', m.mime);
+      ymap.set('size', m.size);
+      ymap.set('chunkHashes', m.chunkHashes);
+      ymap.set('hubComplete', m.hubComplete);
+      ymap.set('addedAt', m.addedAt);
+      this.files.set(m.id, ymap);
     });
-    return { id, name: input.name, mime: input.mime, size, dataB64: input.dataB64, addedAt: now };
   }
 
-  getFiles(): FileEntry[] {
-    const out: FileEntry[] = [];
+  getFileManifests(): FileManifest[] {
+    const out: FileManifest[] = [];
     this.files.forEach((y) => {
       out.push({
         id: y.get('id') as string,
         name: y.get('name') as string,
         mime: y.get('mime') as string,
         size: y.get('size') as number,
-        dataB64: y.get('dataB64') as string,
+        chunkHashes: (y.get('chunkHashes') as string[]) ?? [],
+        hubComplete: (y.get('hubComplete') as boolean) ?? false,
         addedAt: y.get('addedAt') as number,
       });
     });
     return out.sort((a, b) => b.addedAt - a.addedAt);
+  }
+
+  setHubComplete(id: string, complete: boolean): void {
+    const y = this.files.get(id);
+    if (!y) return;
+    this.doc.transact(() => {
+      y.set('hubComplete', complete);
+    });
   }
 
   removeFile(id: string): void {

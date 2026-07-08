@@ -74,9 +74,11 @@ export class HubProvider {
   };
 
   private async push(update: Uint8Array) {
-    if (!this.ws || this.ws.readyState !== OPEN) return; // offline edits arrive via replay later
+    const ws = this.ws;
+    if (!ws || ws.readyState !== OPEN) return; // offline edits arrive via replay later
     const cipher = await encryptUpdate(this.opts.key, update);
-    this.ws.send(JSON.stringify({ t: 'push', data: toBase64Url(cipher) }));
+    // the socket may have closed/destroyed during the await — re-check before sending
+    if (ws.readyState === OPEN) ws.send(JSON.stringify({ t: 'push', data: toBase64Url(cipher) }));
   }
 
   private connect() {

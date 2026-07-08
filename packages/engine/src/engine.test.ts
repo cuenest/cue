@@ -99,17 +99,31 @@ describe('requeue, edit, undo', () => {
   });
 });
 
-describe('files', () => {
-  it('addFile/getFiles/removeFile round-trip', () => {
+describe('file manifests', () => {
+  const manifest = {
+    id: 'f1',
+    name: 'note.txt',
+    mime: 'text/plain',
+    size: 5,
+    chunkHashes: ['h1'],
+    hubComplete: false,
+    addedAt: 1,
+  };
+
+  it('add/get/setHubComplete/remove round-trip', () => {
     const engine = createEngine();
-    const f = engine.addFile({ name: 'note.txt', mime: 'text/plain', dataB64: 'aGVsbG8=' });
-    expect(f.name).toBe('note.txt');
-    expect(f.size).toBe(5); // "hello" is 5 bytes
-    const listed = engine.getFiles();
+    engine.addFileManifest(manifest);
+    let listed = engine.getFileManifests();
     expect(listed).toHaveLength(1);
-    expect(listed[0]!.dataB64).toBe('aGVsbG8=');
-    engine.removeFile(f.id);
-    expect(engine.getFiles()).toHaveLength(0);
+    expect(listed[0]!.name).toBe('note.txt');
+    expect(listed[0]!.hubComplete).toBe(false);
+    expect(listed[0]!.chunkHashes).toEqual(['h1']);
+
+    engine.setHubComplete('f1', true);
+    expect(engine.getFileManifests()[0]!.hubComplete).toBe(true);
+
+    engine.removeFile('f1');
+    expect(engine.getFileManifests()).toHaveLength(0);
   });
 
   it('file changes notify subscribers', () => {
@@ -118,7 +132,7 @@ describe('files', () => {
     engine.subscribe(() => {
       called += 1;
     });
-    engine.addFile({ name: 'a', mime: 'application/octet-stream', dataB64: 'AA==' });
+    engine.addFileManifest(manifest);
     expect(called).toBeGreaterThan(0);
   });
 });
