@@ -1,6 +1,7 @@
 import * as Y from 'yjs';
 import { CueStore } from './store';
 import type { FileManifest } from './files';
+import type { DeviceInfo } from './devices';
 import { inboxItems, nextInboxItem, nextBumpOrder } from './queue';
 import { parseIcsEvents, type CalendarEvent, type CalendarSource } from './calendar';
 import type { Item, ItemId } from './types';
@@ -35,6 +36,12 @@ export interface CueEngine {
   getFileManifests(): FileManifest[];
   setHubComplete(id: string, complete: boolean): void;
   removeFile(id: string): void;
+  /** Announce a device in this space; call again to heartbeat (updates lastSeen). */
+  registerDevice(input: { id: string; name: string; surface: string }): void;
+  touchDevice(id: string): void;
+  removeDevice(id: string): void;
+  getDevices(): DeviceInfo[];
+  subscribeDevices(listener: () => void): () => void;
 }
 
 export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
@@ -53,6 +60,10 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
   });
   store.subscribeFiles(() => {
     snapshot = store.getAllItems(); // same trick for file changes
+    listeners.forEach((l) => l());
+  });
+  store.subscribeDevices(() => {
+    snapshot = store.getAllItems(); // same trick so device-list changes invalidate UI
     listeners.forEach((l) => l());
   });
 
@@ -85,6 +96,11 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
     getFileManifests: () => store.getFileManifests(),
     setHubComplete: (id, complete) => store.setHubComplete(id, complete),
     removeFile: (id) => store.removeFile(id),
+    registerDevice: (input) => store.registerDevice(input),
+    touchDevice: (id) => store.touchDevice(id),
+    removeDevice: (id) => store.removeDevice(id),
+    getDevices: () => store.getDevices(),
+    subscribeDevices: (listener) => store.subscribeDevices(listener),
     getCalendarEvents: (rangeStart, rangeEnd) => {
       const events: CalendarEvent[] = [];
       for (const src of store.getSources()) {
@@ -128,6 +144,7 @@ export {
   type FileManifest,
   type BlobIO,
 } from './files';
+export { isOnline, DEVICE_ONLINE_MS, type DeviceInfo } from './devices';
 export { generateSyncKey, encryptUpdate, decryptUpdate } from './sync/crypto';
 export { makeLinkCode, parseLinkCode, normalizeHubUrl, type LinkPayload } from './sync/link';
 export { HubProvider, type SyncStatus, type HubProviderOptions } from './sync/provider';

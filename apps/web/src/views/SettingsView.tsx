@@ -1,12 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import QRCode from 'qrcode';
-import { generateSyncKey, makeLinkCode, parseLinkCode } from '@cue/engine';
+import { generateSyncKey, makeLinkCode, parseLinkCode, isOnline } from '@cue/engine';
 import { Panel } from '../components/Panel';
 import { useEngine, useItems } from '../useEngine';
 import { syncManager, useSyncStatus, DEFAULT_HUB, type SyncConfig } from '../sync/manager';
 import { spaceManager, useActiveSpace } from '../spaces/manager';
+import { deviceId, deviceName, setDeviceName, deviceSurface } from '../devices/identity';
 import { Button } from '../components/ui/button';
 import { cn } from '../lib/utils';
+import { timeAgo } from '../lib/time';
 
 const PALETTE = ['#4a90d9', '#4fa96b', '#c95d63', '#9a6fb8', '#d98a3d', '#5aa7a7'];
 
@@ -546,12 +548,130 @@ function DataSection() {
   );
 }
 
+function DevicesSection() {
+  const engine = useEngine();
+  useItems(); // re-render when the device registry (or anything) changes
+  const [now, setNow] = useState(Date.now());
+  const [name, setName] = useState(deviceName());
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 15_000); // refresh online/last-seen
+    return () => clearInterval(iv);
+  }, []);
+
+  const meId = deviceId();
+  const devices = engine.getDevices();
+
+  function saveName(e: FormEvent) {
+    e.preventDefault();
+    setDeviceName(name);
+    engine.registerDevice({ id: meId, name: deviceName(), surface: deviceSurface() });
+    setEditing(false);
+  }
+
+  const chip =
+    'ml-2 bg-primary px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-widest text-primary-foreground';
+
+  return (
+    <section className="mb-8">
+      <SectionHeader index="06" title="Devices in this space" />
+      {devices.length === 0 ? (
+        <p className="border border-dashed border-border px-4 py-6 text-center font-mono text-xs text-muted-foreground">
+          just this device so far — linked devices appear here once they join
+        </p>
+      ) : (
+        <ul className="border border-border-strong bg-card shadow-[var(--stack-sm)]">
+          {devices.map((d, i) => {
+            const isMe = d.id === meId;
+            const online = isMe || isOnline(d, now);
+            return (
+              <li
+                key={d.id}
+                className={cn(
+                  'flex flex-wrap items-center gap-3 px-4 py-3',
+                  i > 0 && 'border-t border-border',
+                )}
+              >
+                <span
+                  title={online ? 'online' : 'offline'}
+                  className={cn(
+                    'h-2 w-2 shrink-0 rounded-full ring-1 ring-border-strong',
+                    online ? 'bg-primary' : 'bg-card',
+                  )}
+                />
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {d.name}
+                  {isMe && <span className={chip}>this device</span>}
+                </span>
+                <span className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  {d.surface}
+                </span>
+                <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                  {online ? 'online' : timeAgo(d.lastSeen)}
+                </span>
+                {!isMe && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => engine.removeDevice(d.id)}
+                    title="Remove from this list. Note: it doesn't revoke the space key — the device can rejoin."
+                  >
+                    Forget
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="mt-2">
+        {editing ? (
+          <form onSubmit={saveName} className="flex gap-1.5">
+            <input
+              aria-label="Device name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-8 min-w-0 flex-1 border border-border bg-card px-2 font-mono text-[12px] outline-none focus:border-border-strong"
+            />
+            <Button size="sm" type="submit">
+              Save
+            </Button>
+            <Button size="sm" variant="ghost" type="button" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setName(deviceName());
+              setEditing(true);
+            }}
+            className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            rename this device
+          </button>
+        )}
+      </div>
+
+      <p className="mt-3 border-l-2 border-border pl-3 font-mono text-[10px] leading-relaxed text-muted-foreground">
+        everyone in a space is equal — anyone who has the link code can read and change everything.
+        &ldquo;Forget&rdquo; only clears the list entry; enforced removal (revoking a device&rsquo;s
+        access) needs per-person keys, which are planned.
+      </p>
+    </section>
+  );
+}
+
 export function SettingsView() {
   return (
     <Panel delay={60}>
       <div className="px-5 py-5 pb-8 sm:px-6">
         <SyncSection />
         <SpacesSection />
+        <DevicesSection />
         <CalendarsSection />
         <AiSection />
         <DataSection />

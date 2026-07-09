@@ -2,22 +2,26 @@ import * as Y from 'yjs';
 import type { Item, ItemId, ItemStatus } from './types';
 import type { CalendarSource } from './calendar';
 import type { FileManifest } from './files';
+import type { DeviceInfo } from './devices';
 
 const ITEMS_KEY = 'items';
 const SOURCES_KEY = 'sources';
 const FILES_KEY = 'files';
+const DEVICES_KEY = 'devices';
 
 export class CueStore {
   readonly doc: Y.Doc;
   private readonly items: Y.Map<Y.Map<unknown>>;
   private readonly sources: Y.Map<Y.Map<unknown>>;
   private readonly files: Y.Map<Y.Map<unknown>>;
+  private readonly devices: Y.Map<Y.Map<unknown>>;
 
   constructor(doc: Y.Doc = new Y.Doc()) {
     this.doc = doc;
     this.items = doc.getMap(ITEMS_KEY);
     this.sources = doc.getMap(SOURCES_KEY);
     this.files = doc.getMap(FILES_KEY);
+    this.devices = doc.getMap(DEVICES_KEY);
   }
 
   addItem(body: string, now: number = Date.now()): Item {
@@ -169,6 +173,55 @@ export class CueStore {
     const handler = () => listener();
     this.files.observeDeep(handler);
     return () => this.files.unobserveDeep(handler);
+  }
+
+  /** Announce a device in this space (idempotent — updates name/lastSeen, keeps addedAt). */
+  registerDevice(input: { id: string; name: string; surface: string }, now: number = Date.now()): void {
+    this.doc.transact(() => {
+      let y = this.devices.get(input.id);
+      if (!y) {
+        y = new Y.Map<unknown>();
+        y.set('id', input.id);
+        y.set('addedAt', now);
+        this.devices.set(input.id, y);
+      }
+      y.set('name', input.name);
+      y.set('surface', input.surface);
+      y.set('lastSeen', now);
+    });
+  }
+
+  /** Heartbeat: refresh a device's lastSeen (no-op if it isn't registered). */
+  touchDevice(id: string, now: number = Date.now()): void {
+    const y = this.devices.get(id);
+    if (!y) return;
+    this.doc.transact(() => y.set('lastSeen', now));
+  }
+
+  removeDevice(id: string): void {
+    this.doc.transact(() => {
+      this.devices.delete(id);
+    });
+  }
+
+  getDevices(): DeviceInfo[] {
+    const out: DeviceInfo[] = [];
+    this.devices.forEach((y) => {
+      out.push({
+        id: y.get('id') as string,
+        name: y.get('name') as string,
+        surface: (y.get('surface') as string) ?? 'web',
+        addedAt: y.get('addedAt') as number,
+        lastSeen: y.get('lastSeen') as number,
+      });
+    });
+    return out.sort((a, b) => a.addedAt - b.addedAt);
+  }
+
+  subscribeDevices(listener: () => void): () => void {
+    const handler = () => listener();
+    this.devices.observeDeep(handler);
+    return () => this.devices.unobserveDeep(handler);
   }
 }
 
