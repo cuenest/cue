@@ -343,6 +343,7 @@ function SpacesSection() {
   const [inviteFor, setInviteFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [inviteQr, setInviteQr] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   const invite = inviteFor
     ? (() => {
@@ -372,13 +373,12 @@ function SpacesSection() {
     spaceManager.setActive(s.id);
   }
 
-  function join(e: FormEvent) {
-    e.preventDefault();
+  function joinWithCode(code: string): boolean {
     setError(null);
-    const parsed = parseLinkCode(joinCode.trim());
+    const parsed = parseLinkCode(code.trim());
     if (!parsed) {
       setError('That space code is not valid.');
-      return;
+      return false;
     }
     const s = spaceManager.join({
       name: joinName.trim() || 'Shared space',
@@ -389,6 +389,12 @@ function SpacesSection() {
     setJoinCode('');
     setJoinName('');
     spaceManager.setActive(s.id);
+    return true;
+  }
+
+  function join(e: FormEvent) {
+    e.preventDefault();
+    joinWithCode(joinCode);
   }
 
   return (
@@ -480,12 +486,25 @@ function SpacesSection() {
             placeholder="paste a space invite code (cue1.…)"
             className="h-9 min-w-44 flex-1 rounded-[2px] border border-border bg-transparent px-2 font-mono text-xs outline-none focus:border-border-strong"
           />
+          <Button type="button" variant="outline" onClick={() => setScanning(true)}>
+            Scan QR
+          </Button>
           <Button type="submit" variant="outline">
             Join space
           </Button>
         </form>
         {error && <p className="mt-2 font-mono text-xs text-muted-foreground">{error}</p>}
       </div>
+
+      {scanning && (
+        <QrScanner
+          onScan={(text) => {
+            setScanning(false);
+            joinWithCode(text);
+          }}
+          onClose={() => setScanning(false)}
+        />
+      )}
     </div>
   );
 }
