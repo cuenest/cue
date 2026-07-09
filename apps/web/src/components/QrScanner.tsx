@@ -2,14 +2,21 @@ import { useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 import { Button } from './ui/button';
 
+type Phase = 'starting' | 'scanning' | 'error';
+
 /**
  * Camera QR scanner. Opens the back camera, decodes frames with jsQR (works on
  * iOS + Android, unlike the native BarcodeDetector), and calls onScan with the
- * decoded text. Camera access needs a secure context (https or localhost).
+ * decoded text.
+ *
+ * Mobile is fussy: the <video> must be autoPlay + muted + playsinline, and we
+ * must wait for metadata before play() — otherwise the feed is a black screen.
+ * Any failure is surfaced (not swallowed) so the user sees why.
  */
 export function QrScanner({ onScan, onClose }: { onScan: (text: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>('starting');
+  const [detail, setDetail] = useState<string>('');
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -18,25 +25,57 @@ export function QrScanner({ onScan, onClose }: { onScan: (text: string) => void;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
+    function fail(message: string, technical?: string) {
+      if (done) return;
+      setDetail(technical ? `${message} (${technical})` : message);
+      setPhase('error');
+    }
+
     async function start() {
+      if (!window.isSecureContext) {
+        fail('The camera needs a secure connection. Open the https:// site, then try again.');
+        return;
+      }
       if (!navigator.mediaDevices?.getUserMedia) {
-        setError('This browser can’t access the camera. Paste the code instead.');
+        fail('This browser can’t open the camera here. Paste the code instead.');
         return;
       }
+      // Prefer the back camera; if that exact constraint isn't available, retry with any camera.
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
-          audio: false,
-        });
-      } catch {
-        setError('Camera permission denied or unavailable. Paste the code instead.');
+        stream = await navigator.mediaDevices
+          .getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+          .catch(() => navigator.mediaDevices.getUserMedia({ video: true, audio: false }));
+      } catch (e) {
+        const name = e instanceof DOMException ? e.name : 'error';
+        fail(
+          name === 'NotAllowedError'
+            ? 'Camera permission was denied. Allow it in your browser, or paste the code.'
+            : 'Couldn’t open the camera. Paste the code instead.',
+          name,
+        );
         return;
       }
+
       const video = videoRef.current;
-      if (!video) return;
+      if (!video || done) return;
+      video.muted = true;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
       video.srcObject = stream;
-      video.setAttribute('playsinline', 'true'); // iOS: don't go fullscreen
-      await video.play().catch(() => {});
+
+      // Wait for dimensions, then play. Without this the frame grab reads 0×0.
+      await new Promise<void>((resolve) => {
+        if (video.readyState >= 1) return resolve();
+        video.onloadedmetadata = () => resolve();
+      });
+      try {
+        await video.play();
+      } catch (e) {
+        fail('Couldn’t start the camera preview. Tap the screen and retry.', (e as Error)?.name);
+        return;
+      }
+      if (done) return;
+      setPhase('scanning');
       tick();
     }
 
@@ -89,25 +128,35 @@ export function QrScanner({ onScan, onClose }: { onScan: (text: string) => void;
             close ✕
           </button>
         </div>
-        <div className="relative aspect-square w-full overflow-hidden bg-background">
-          <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
-          {/* framing reticle */}
-          <div className="pointer-events-none absolute inset-8 border-2 border-primary/80" />
-          {error && (
-            <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
-              <p className="font-mono text-xs text-muted-foreground">{error}</p>
+        <div className="relative aspect-square w-full overflow-hidden bg-black">
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className="h-full w-full object-cover"
+          />
+          {phase === 'scanning' && (
+            <div className="pointer-events-none absolute inset-8 rounded-md border-2 border-primary/80" />
+          )}
+          {phase === 'starting' && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <p className="font-mono text-xs text-muted-foreground">starting camera…</p>
+            </div>
+          )}
+          {phase === 'error' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-card p-6 text-center">
+              <p className="font-mono text-xs leading-relaxed text-foreground">{detail}</p>
             </div>
           )}
         </div>
         <div className="flex items-center justify-between gap-2 px-4 py-3">
           <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            point at the code on the other device
+            {phase === 'scanning' ? 'point at the code on the other device' : 'link a device'}
           </span>
-          {error && (
-            <Button size="sm" variant="outline" onClick={onClose}>
-              Close
-            </Button>
-          )}
+          <Button size="sm" variant="outline" onClick={onClose}>
+            {phase === 'error' ? 'Close' : 'Cancel'}
+          </Button>
         </div>
       </div>
     </div>
