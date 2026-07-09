@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wxt",
+    "postinstall": "wxt prepare",
+    "dev": "wxt prepare && wxt",
     "build": "wxt build",
     "prepare:types": "wxt prepare",
     "typecheck": "wxt prepare && tsc --noEmit",
