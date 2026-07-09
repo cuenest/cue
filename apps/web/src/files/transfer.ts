@@ -52,21 +52,36 @@ export async function hashFileChunks(file: File): Promise<string[]> {
   return hashes;
 }
 
-/** Encrypt + upload each missing chunk, reading one slice at a time. Dedup by hash. */
+/**
+ * Encrypt + upload each missing chunk, reading one slice at a time. Dedup by
+ * hash. Chunks upload with limited concurrency so a multi-chunk file isn't stuck
+ * doing one slow round-trip at a time (the dominant cost on a remote hub), while
+ * capping how much is in flight at once for low-memory devices.
+ */
 export async function uploadFileChunks(
   file: File,
   hashes: string[],
   key: string,
   io: BlobIO,
   onProgress?: (done: number, total: number) => void,
+  concurrency = 3,
 ): Promise<void> {
-  for (let i = 0; i < hashes.length; i++) {
-    const hash = hashes[i]!;
-    if (!(await io.has(hash))) {
-      await io.put(hash, await encryptUpdate(key, await sliceBytes(file, i)));
+  let done = 0;
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    for (;;) {
+      const i = cursor++;
+      if (i >= hashes.length) return;
+      const hash = hashes[i]!;
+      if (!(await io.has(hash))) {
+        await io.put(hash, await encryptUpdate(key, await sliceBytes(file, i)));
+      }
+      done += 1;
+      onProgress?.(done, hashes.length);
     }
-    onProgress?.(i + 1, hashes.length);
   }
+  const workers = Math.max(1, Math.min(concurrency, hashes.length));
+  await Promise.all(Array.from({ length: workers }, () => worker()));
 }
 
 /**
