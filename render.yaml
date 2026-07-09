@@ -11,17 +11,19 @@ services:
     name: cue-hub
     runtime: node
     plan: free
-    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    # Filtered install: only the hub's dependency subtree, so Electron (a devDep
+    # of @cue/desktop) is never downloaded — that download often fails/times out
+    # on free instances and would sink the whole build.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --filter @cue/hub...
     startCommand: pnpm --filter @cue/hub start
     envVars:
+      # /tmp is guaranteed writable on Render; /var/data is not, unless a disk is
+      # mounted there. Ephemeral is fine — devices hold full replicas and
+      # re-push on reconnect; only unpinned files with no online holder are lost.
       - key: CUE_HUB_DATA
-        value: /var/data/cue-hub
-    # Durability: the free tier has an EPHEMERAL disk — rooms and file blobs are
-    # wiped on every deploy/restart. That's usually fine, because every device
-    # keeps a full local replica and re-pushes on reconnect; only unpinned files
-    # with no online holder can be lost. For durable storage, move this service
-    # to a paid instance and uncomment the disk below (mountPath must contain
-    # CUE_HUB_DATA above):
+        value: /tmp/cue-hub
+    # For durable storage: move to a paid instance, uncomment the disk, and set
+    # CUE_HUB_DATA above to a path under mountPath (e.g. /var/data/cue-hub):
     # disk:
     #   name: cue-hub-data
     #   mountPath: /var/data
@@ -33,7 +35,7 @@ services:
   - type: web
     name: cue-web
     runtime: static
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @cue/web build
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --filter @cue/web... && pnpm --filter @cue/web build
     staticPublishPath: apps/web/dist
     envVars:
       - key: VITE_DEFAULT_HUB
