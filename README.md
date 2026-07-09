@@ -166,7 +166,7 @@ Cue is in early development. The work is divided into phases, each independently
 | 3 | Shared spaces + secure file transfer | Working — chunked content-addressed transfer via hub (any size, dedup, on-demand); stream/preview from hub (Service Worker); keep-offline pin works with hub down; per-person keys + LAN P2P planned |
 | 4 | Assistant | Working — bring-your-own-key, tool-calling over local data, browser-direct |
 
-Surfaces: **web** (working) · **browser extension** (working — quick-capture popup, right-click capture, syncs as its own device) · **desktop** (working — Electron shell with an Alt+Shift+C global capture hotkey) · **mobile** (Android project scaffolded via Capacitor; APK build needs the Android SDK) · iOS planned.
+Surfaces: **web** (working) · **browser extension** (working — quick-capture popup, right-click capture, syncs as its own device) · **desktop** (working — Electron shell with an Alt+Shift+C global capture hotkey) · **mobile** (Android via Capacitor — branded, hub-wired, `cap copy` verified; APK build + on-device testing need the Android SDK) · iOS planned.
 
 ---
 

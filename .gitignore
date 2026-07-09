@@ -14,6 +14,9 @@ build/
 .env
 .env.*
 !.env.example
+# .env.production holds only the public default hub URL (no secrets) and must
+# ship so prod/desktop/mobile builds default to the deployed hub.
+!.env.production
 
 # Editor / OS
 .DS_Store
