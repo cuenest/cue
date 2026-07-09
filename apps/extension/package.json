@@ -8,7 +8,7 @@
     "build": "wxt build",
     "prepare:types": "wxt prepare",
     "typecheck": "wxt prepare && tsc --noEmit",
-    "test": "vitest run"
+    "test": "wxt prepare && vitest run"
   },
   "dependencies": {
     "@cue/engine": "workspace:*",
