@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { assembleFile, type FileManifest } from '@cue/engine';
 import { Panel } from '../components/Panel';
 import { Button } from '../components/ui/button';
@@ -244,17 +245,22 @@ export function FilesView() {
         )}
       </div>
 
-      {preview && (
-        <div
-          role="dialog"
-          aria-label={`Preview ${preview.name}`}
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/90 p-4"
-          onClick={() => setPreview(null)}
-        >
+      {preview &&
+        createPortal(
           <div
-            className="flex max-h-[85vh] w-full max-w-3xl flex-col border border-border-strong bg-card shadow-[var(--stack)]"
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label={`Preview ${preview.name}`}
+            className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-background/90 p-4"
+            style={{
+              paddingTop: 'max(1rem, env(safe-area-inset-top))',
+              paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+            }}
+            onClick={() => setPreview(null)}
           >
+            <div
+              className="flex max-h-full w-full max-w-3xl flex-col border border-border-strong bg-card shadow-[var(--stack)]"
+              onClick={(e) => e.stopPropagation()}
+            >
             <div className="flex items-center justify-between border-b border-border px-4 py-2">
               <span className="truncate font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                 {preview.name} · streaming from hub
@@ -280,8 +286,9 @@ export function FilesView() {
               )}
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </Panel>
   );
 }
