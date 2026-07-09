@@ -14,7 +14,9 @@ services:
     # Filtered install: only the hub's dependency subtree, so Electron (a devDep
     # of @cue/desktop) is never downloaded — that download often fails/times out
     # on free instances and would sink the whole build.
-    buildCommand: corepack enable && pnpm install --frozen-lockfile --filter @cue/hub...
+    # No `corepack enable` — Render's /usr/bin is read-only (it errors EROFS) and
+    # pnpm is already provisioned from the package.json "packageManager" field.
+    buildCommand: pnpm install --frozen-lockfile --filter @cue/hub...
     startCommand: pnpm --filter @cue/hub start
     envVars:
       # /tmp is guaranteed writable on Render; /var/data is not, unless a disk is
@@ -35,7 +37,7 @@ services:
   - type: web
     name: cue-web
     runtime: static
-    buildCommand: corepack enable && pnpm install --frozen-lockfile --filter @cue/web... && pnpm --filter @cue/web build
+    buildCommand: pnpm install --frozen-lockfile --filter @cue/web... && pnpm --filter @cue/web build
     staticPublishPath: apps/web/dist
     envVars:
       - key: VITE_DEFAULT_HUB
