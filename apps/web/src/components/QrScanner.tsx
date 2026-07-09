@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import jsQR from 'jsqr';
 import { Button } from './ui/button';
 
@@ -17,6 +18,15 @@ export function QrScanner({ onScan, onClose }: { onScan: (text: string) => void;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [phase, setPhase] = useState<Phase>('starting');
   const [detail, setDetail] = useState<string>('');
+
+  // lock background scroll while the full-screen scanner is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -105,60 +115,81 @@ export function QrScanner({ onScan, onClose }: { onScan: (text: string) => void;
     };
   }, [onScan]);
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-label="Scan a link QR code"
-      className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-background/95 p-4"
-      onClick={onClose}
+      className="fixed inset-0 z-[70] bg-black"
     >
-      <div
-        className="flex w-full max-w-sm flex-col border border-border-strong bg-card shadow-[var(--stack)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-border px-4 py-2">
-          <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+      {/* full-screen camera feed */}
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+
+      {/* controls float over the feed */}
+      <div className="absolute inset-0 flex flex-col">
+        {/* top bar (with a scrim for legibility over the video) */}
+        <div
+          className="flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-5 pb-6"
+          style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
+        >
+          <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/80">
             Scan link QR
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+            aria-label="Close scanner"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-lg text-white"
           >
-            close ✕
+            ✕
           </button>
         </div>
-        <div className="relative aspect-square w-full overflow-hidden bg-black">
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="h-full w-full object-cover"
-          />
+
+        {/* center reticle */}
+        <div className="flex flex-1 items-center justify-center px-8">
           {phase === 'scanning' && (
-            <div className="pointer-events-none absolute inset-8 rounded-md border-2 border-primary/80" />
+            <div className="relative aspect-square w-full max-w-[72vw] sm:max-w-xs">
+              <span className="absolute -left-0.5 -top-0.5 h-8 w-8 rounded-tl-lg border-l-4 border-t-4 border-primary" />
+              <span className="absolute -right-0.5 -top-0.5 h-8 w-8 rounded-tr-lg border-r-4 border-t-4 border-primary" />
+              <span className="absolute -bottom-0.5 -left-0.5 h-8 w-8 rounded-bl-lg border-b-4 border-l-4 border-primary" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-8 w-8 rounded-br-lg border-b-4 border-r-4 border-primary" />
+            </div>
           )}
           {phase === 'starting' && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <p className="font-mono text-xs text-muted-foreground">starting camera…</p>
-            </div>
+            <p className="font-mono text-xs uppercase tracking-widest text-white/80">
+              starting camera…
+            </p>
           )}
           {phase === 'error' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-card p-6 text-center">
-              <p className="font-mono text-xs leading-relaxed text-foreground">{detail}</p>
-            </div>
+            <p className="max-w-xs text-center font-mono text-sm leading-relaxed text-white">
+              {detail}
+            </p>
           )}
         </div>
-        <div className="flex items-center justify-between gap-2 px-4 py-3">
-          <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            {phase === 'scanning' ? 'point at the code on the other device' : 'link a device'}
+
+        {/* bottom hint + actions */}
+        <div
+          className="flex flex-col items-center gap-3 bg-gradient-to-t from-black/70 to-transparent px-5 pt-6"
+          style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+        >
+          <span className="text-center font-mono text-[11px] uppercase tracking-widest text-white/80">
+            {phase === 'scanning'
+              ? 'point at the QR on the other device'
+              : phase === 'error'
+                ? 'or paste the code instead'
+                : 'link a device'}
           </span>
-          <Button size="sm" variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} className="border-white/40 bg-black/40 text-white">
             {phase === 'error' ? 'Close' : 'Cancel'}
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
