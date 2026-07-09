@@ -12,6 +12,7 @@ import { SettingsView } from './views/SettingsView';
 import { useRoute, navigate, type Route } from './router';
 import { useSyncStatus } from './sync/manager';
 import { spaceManager, useActiveSpace } from './spaces/manager';
+import { usePresence } from './devices/identity';
 import { cn } from './lib/utils';
 
 const ROUTES: Route[] = ['queue', 'calendar', 'ask', 'files', 'settings'];
@@ -52,6 +53,7 @@ export function App({
   const route = useRoute();
   spaceManager.init(engine);
   const { engine: activeEngine } = useActiveSpace();
+  usePresence(activeEngine); // announce this device in the active space + heartbeat
 
   return (
     <EngineContext.Provider value={activeEngine}>
