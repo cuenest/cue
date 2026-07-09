@@ -1,0 +1,11 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- full-bleed brand yellow: safe for maskable (OS mask always lands on brand) and "any" -->
+  <rect width="512" height="512" fill="#ffd21e"/>
+  <!-- Cue mark: an open ink "C" (a queue that flows in one side) with a filled cue-dot at the opening -->
+  <g fill="none" stroke="#1d1b16" stroke-width="44" stroke-linecap="round">
+    <!-- C arc: gap on the right = the "cue point" where the next item enters -->
+    <path d="M 352 168 A 128 128 0 1 0 352 344"/>
+  </g>
+  <!-- the one-at-a-time cue dot sitting at the mouth of the C -->
+  <circle cx="356" cy="256" r="30" fill="#1d1b16"/>
+</svg>
