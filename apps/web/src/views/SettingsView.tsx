@@ -7,6 +7,7 @@ import { syncManager, useSyncStatus, DEFAULT_HUB, type SyncConfig } from '../syn
 import { spaceManager, useActiveSpace } from '../spaces/manager';
 import { deviceId, deviceName, setDeviceName, deviceSurface } from '../devices/identity';
 import { Button } from '../components/ui/button';
+import { QrScanner } from '../components/QrScanner';
 import { cn } from '../lib/utils';
 import { timeAgo } from '../lib/time';
 
@@ -31,6 +32,7 @@ function SyncSection() {
   const [error, setError] = useState<string | null>(null);
   const [showCode, setShowCode] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   const linkCode = config ? makeLinkCode({ room: config.room, key: config.key, hub: config.hub }) : null;
 
@@ -55,13 +57,12 @@ function SyncSection() {
     setConfig(cfg);
   }
 
-  function joinSpace(e: FormEvent) {
-    e.preventDefault();
+  function joinWithCode(code: string): boolean {
     setError(null);
-    const parsed = parseLinkCode(joinCode.trim());
+    const parsed = parseLinkCode(code.trim());
     if (!parsed) {
       setError('That code is not valid.');
-      return;
+      return false;
     }
     const cfg: SyncConfig = {
       room: parsed.room,
@@ -71,6 +72,12 @@ function SyncSection() {
     syncManager.configure(cfg);
     setConfig(cfg);
     setJoinCode('');
+    return true;
+  }
+
+  function joinSpace(e: FormEvent) {
+    e.preventDefault();
+    joinWithCode(joinCode);
   }
 
   function leave() {
@@ -113,6 +120,9 @@ function SyncSection() {
                 placeholder="paste a link code (cue1.…)"
                 className="h-9 min-w-56 flex-1 rounded-[2px] border border-border bg-transparent px-2 font-mono text-xs outline-none focus:border-border-strong"
               />
+              <Button type="button" variant="outline" onClick={() => setScanning(true)}>
+                Scan QR
+              </Button>
               <Button type="submit" variant="outline">
                 Join
               </Button>
@@ -168,6 +178,16 @@ function SyncSection() {
         )}
         {error && <p className="mt-2 font-mono text-xs text-muted-foreground">{error}</p>}
       </div>
+
+      {scanning && (
+        <QrScanner
+          onScan={(text) => {
+            setScanning(false);
+            joinWithCode(text); // joins on success; sets the error shown above on failure
+          }}
+          onClose={() => setScanning(false)}
+        />
+      )}
     </div>
   );
 }
