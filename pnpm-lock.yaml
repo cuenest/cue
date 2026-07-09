@@ -19,6 +19,10 @@ importers:
         version: 5.9.3
 
   apps/desktop:
+    dependencies:
+      '@cue/hub':
+        specifier: workspace:*
+        version: link:../hub
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
