@@ -39,6 +39,18 @@ export function FilesView() {
     null,
   );
   const [pinned, setPinnedState] = useState<Set<string>>(() => pinnedIds());
+  const [noticeDismissed, setNoticeDismissed] = useState(
+    () => localStorage.getItem('cue-files-notice') === 'dismissed',
+  );
+
+  function dismissNotice() {
+    setNoticeDismissed(true);
+    try {
+      localStorage.setItem('cue-files-notice', 'dismissed');
+    } catch {
+      /* private mode */
+    }
+  }
   const [pinning, setPinning] = useState<string | null>(null);
 
   // no hub for the active space → can't move bytes
@@ -126,7 +138,9 @@ export function FilesView() {
       a.click();
       URL.revokeObjectURL(a.href);
     } catch {
-      setError('Could not download — the file may not be on the hub yet, or the hub is offline.');
+      setError(
+        `Couldn’t get “${m.name}”. Its data may have been cleared from the hub (free hubs lose files when they restart) or the hub is offline. Try re-uploading it, and use Keep offline next time.`,
+      );
     }
   }
 
@@ -138,7 +152,9 @@ export function FilesView() {
       const url = await preparePreview(m, transport);
       setPreview({ url, kind, name: m.name });
     } catch {
-      setError('Could not open a preview — the hub may be offline.');
+      setError(
+        `Couldn’t preview “${m.name}”. Its data may have been cleared from the hub or the hub is offline. Try re-uploading it.`,
+      );
     }
   }
 
@@ -179,6 +195,30 @@ export function FilesView() {
         </div>
         {error && (
           <p className="mb-3 border border-border-strong bg-primary/20 px-3 py-2 text-xs">{error}</p>
+        )}
+
+        {files.length > 0 && !noticeDismissed && (
+          <div className="mb-3 flex items-start gap-3 border border-border-strong bg-card px-3 py-2.5 shadow-[var(--stack-sm)]">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 shrink-0 bg-primary px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-primary-foreground"
+            >
+              note
+            </span>
+            <p className="flex-1 text-[12px] leading-relaxed text-muted-foreground">
+              Files are stored on your sync hub, not inside the synced notes. A free or restarted
+              hub can lose file data — tap <span className="font-semibold text-foreground">Keep
+              offline</span> on anything important to keep a copy on this device.
+            </p>
+            <button
+              type="button"
+              onClick={dismissNotice}
+              aria-label="Dismiss notice"
+              className="shrink-0 font-mono text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+            >
+              ✕
+            </button>
+          </div>
         )}
 
         {files.length === 0 ? (
