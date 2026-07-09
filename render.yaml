@@ -40,11 +40,12 @@ services:
     buildCommand: pnpm install --frozen-lockfile --filter @cue/web... && pnpm --filter @cue/web build
     staticPublishPath: apps/web/dist
     envVars:
+      # Must be the PUBLIC hub URL. Do NOT use `fromService … property: host` —
+      # that returns the internal hostname (e.g. "cue-hub"), which a browser
+      # can't reach, so sync sits on "offline". Use the public onrender.com URL.
+      # If you renamed the hub service, change this to match.
       - key: VITE_DEFAULT_HUB
-        fromService:
-          type: web
-          name: cue-hub
-          property: host
+        value: wss://cue-hub.onrender.com
     routes:
       # SPA + hash-router fallback: serve index.html for any unknown path.
       - type: rewrite
