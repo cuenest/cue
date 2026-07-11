@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { slugify, titleFromSlug, type Note } from '@cue/engine';
 import { useEngine, useItems } from '../useEngine';
 import { resolveNoteRefs } from '../notes/resolve';
@@ -12,10 +13,12 @@ export function Capture() {
   const engine = useEngine();
   useItems(); // re-render as notes/items change so suggestions stay fresh
   const inputRef = useRef<HTMLInputElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
   const [caret, setCaret] = useState(0);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number; width: number } | null>(null);
   const pendingCaret = useRef<number | null>(null);
 
   // apply a programmatic caret position after we rewrite the text
@@ -41,6 +44,27 @@ export function Capture() {
     suggestions = query && !exact ? [...filtered, { kind: 'create', slug: query }] : filtered;
   }
   const showMenu = !!match && suggestions.length > 0;
+
+  // Position the dropdown (portaled to <body>) under the input box, tracking
+  // scroll/resize. Portaling escapes the section panels' stacking + the
+  // dividers below, so the menu always floats cleanly above the page.
+  useEffect(() => {
+    if (!showMenu) {
+      setMenuPos(null);
+      return;
+    }
+    const update = () => {
+      const r = boxRef.current?.getBoundingClientRect();
+      if (r) setMenuPos({ left: r.left, top: r.bottom + 4, width: r.width });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [showMenu, text, caret]);
 
   function syncCaret() {
     setCaret(inputRef.current?.selectionStart ?? text.length);
@@ -95,7 +119,10 @@ export function Capture() {
       </div>
 
       <form onSubmit={submit} className="relative">
-        <div className="flex items-center gap-3 border border-border-strong bg-card px-4 shadow-[var(--stack-sm)] transition-[transform,box-shadow] duration-150 focus-within:translate-x-[2px] focus-within:translate-y-[2px] focus-within:shadow-none">
+        <div
+          ref={boxRef}
+          className="flex items-center gap-3 border border-border-strong bg-card px-4 shadow-[var(--stack-sm)] transition-[transform,box-shadow] duration-150 focus-within:translate-x-[2px] focus-within:translate-y-[2px] focus-within:shadow-none"
+        >
           <input
             ref={inputRef}
             aria-label="Capture"
@@ -120,9 +147,14 @@ export function Capture() {
           </kbd>
         </div>
 
-        {showMenu && (
-          <ul className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-auto border border-border-strong bg-card shadow-[var(--stack)]">
-            {suggestions.map((s, i) => (
+        {showMenu &&
+          menuPos &&
+          createPortal(
+            <ul
+              className="fixed z-[80] max-h-64 overflow-auto border border-border-strong bg-card shadow-[var(--stack)]"
+              style={{ left: menuPos.left, top: menuPos.top, width: menuPos.width }}
+            >
+              {suggestions.map((s, i) => (
               <li key={s.kind === 'note' ? s.note.id : `create-${s.slug}`}>
                 <button
                   type="button"
@@ -154,9 +186,10 @@ export function Capture() {
                   )}
                 </button>
               </li>
-            ))}
-          </ul>
-        )}
+              ))}
+            </ul>,
+            document.body,
+          )}
       </form>
     </div>
   );
