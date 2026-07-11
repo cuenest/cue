@@ -17,7 +17,7 @@ import { spaceManager, useActiveSpace } from './spaces/manager';
 import { usePresence } from './devices/identity';
 import { cn } from './lib/utils';
 
-const ROUTES: Route[] = ['queue', 'calendar', 'ask', 'files', 'notes', 'settings'];
+const ROUTES: Route[] = ['queue', 'notes', 'calendar', 'ask', 'files', 'settings'];
 
 function Nav({ active }: { active: Route }) {
   const syncStatus = useSyncStatus();

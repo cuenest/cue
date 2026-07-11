@@ -2,7 +2,7 @@ import { navigate, type Route } from '../router';
 import { useSyncStatus } from '../sync/manager';
 import { cn } from '../lib/utils';
 
-const ROUTES: Route[] = ['queue', 'calendar', 'ask', 'files', 'notes', 'settings'];
+const ROUTES: Route[] = ['queue', 'notes', 'calendar', 'ask', 'files', 'settings'];
 const LABELS: Record<Route, string> = {
   queue: 'Queue',
   calendar: 'Calendar',
