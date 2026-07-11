@@ -11,4 +11,6 @@ export interface Item {
   dueAt?: number;
   delegatedTo?: string;
   updatedAt: number;
+  /** Ids of notes this item references (via #notes: links). */
+  noteRefs?: string[];
 }

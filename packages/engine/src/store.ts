@@ -3,11 +3,13 @@ import type { Item, ItemId, ItemStatus } from './types';
 import type { CalendarSource } from './calendar';
 import type { FileManifest } from './files';
 import type { DeviceInfo } from './devices';
+import type { Note } from './notes';
 
 const ITEMS_KEY = 'items';
 const SOURCES_KEY = 'sources';
 const FILES_KEY = 'files';
 const DEVICES_KEY = 'devices';
+const NOTES_KEY = 'notes';
 
 export class CueStore {
   readonly doc: Y.Doc;
@@ -15,6 +17,7 @@ export class CueStore {
   private readonly sources: Y.Map<Y.Map<unknown>>;
   private readonly files: Y.Map<Y.Map<unknown>>;
   private readonly devices: Y.Map<Y.Map<unknown>>;
+  private readonly notes: Y.Map<Y.Map<unknown>>;
 
   constructor(doc: Y.Doc = new Y.Doc()) {
     this.doc = doc;
@@ -22,6 +25,7 @@ export class CueStore {
     this.sources = doc.getMap(SOURCES_KEY);
     this.files = doc.getMap(FILES_KEY);
     this.devices = doc.getMap(DEVICES_KEY);
+    this.notes = doc.getMap(NOTES_KEY);
   }
 
   addItem(body: string, now: number = Date.now()): Item {
@@ -223,6 +227,64 @@ export class CueStore {
     this.devices.observeDeep(handler);
     return () => this.devices.unobserveDeep(handler);
   }
+
+  // ---- Notes ----------------------------------------------------------------
+  createNote(input: { title: string; body?: string }, now: number = Date.now()): Note {
+    const id = crypto.randomUUID();
+    this.doc.transact(() => {
+      const y = new Y.Map<unknown>();
+      y.set('id', id);
+      y.set('title', input.title);
+      y.set('body', input.body ?? '');
+      y.set('createdAt', now);
+      y.set('updatedAt', now);
+      this.notes.set(id, y);
+    });
+    return this.getNote(id)!;
+  }
+
+  updateNote(id: string, patch: { title?: string; body?: string }, now: number = Date.now()): void {
+    const y = this.notes.get(id);
+    if (!y) return;
+    this.doc.transact(() => {
+      if (patch.title !== undefined) y.set('title', patch.title);
+      if (patch.body !== undefined) y.set('body', patch.body);
+      y.set('updatedAt', now);
+    });
+  }
+
+  removeNote(id: string): void {
+    this.doc.transact(() => {
+      this.notes.delete(id);
+    });
+  }
+
+  getNote(id: string): Note | undefined {
+    const y = this.notes.get(id);
+    return y ? toNote(y) : undefined;
+  }
+
+  getNotes(): Note[] {
+    const out: Note[] = [];
+    this.notes.forEach((y) => out.push(toNote(y)));
+    return out.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  subscribeNotes(listener: () => void): () => void {
+    const handler = () => listener();
+    this.notes.observeDeep(handler);
+    return () => this.notes.unobserveDeep(handler);
+  }
+}
+
+function toNote(y: Y.Map<unknown>): Note {
+  return {
+    id: y.get('id') as string,
+    title: y.get('title') as string,
+    body: (y.get('body') as string) ?? '',
+    createdAt: y.get('createdAt') as number,
+    updatedAt: y.get('updatedAt') as number,
+  };
 }
 
 function toItem(y: Y.Map<unknown>): Item {
@@ -235,5 +297,6 @@ function toItem(y: Y.Map<unknown>): Item {
     dueAt: y.get('dueAt') as number | undefined,
     delegatedTo: y.get('delegatedTo') as string | undefined,
     updatedAt: y.get('updatedAt') as number,
+    noteRefs: y.get('noteRefs') as string[] | undefined,
   };
 }

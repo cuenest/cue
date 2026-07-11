@@ -2,6 +2,7 @@ import * as Y from 'yjs';
 import { CueStore } from './store';
 import type { FileManifest } from './files';
 import type { DeviceInfo } from './devices';
+import type { Note } from './notes';
 import { inboxItems, nextInboxItem, nextBumpOrder } from './queue';
 import { parseIcsEvents, type CalendarEvent, type CalendarSource } from './calendar';
 import type { Item, ItemId } from './types';
@@ -42,6 +43,15 @@ export interface CueEngine {
   removeDevice(id: string): void;
   getDevices(): DeviceInfo[];
   subscribeDevices(listener: () => void): () => void;
+  /** Notes: persistent reference material, linked from items via #notes:. */
+  createNote(input: { title: string; body?: string }): Note;
+  updateNote(id: string, patch: { title?: string; body?: string }): void;
+  removeNote(id: string): void;
+  getNote(id: string): Note | undefined;
+  getNotes(): Note[];
+  subscribeNotes(listener: () => void): () => void;
+  /** Set the notes an item references (its #notes: links). */
+  setNoteRefs(id: ItemId, noteRefs: string[]): void;
 }
 
 export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
@@ -64,6 +74,10 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
   });
   store.subscribeDevices(() => {
     snapshot = store.getAllItems(); // same trick so device-list changes invalidate UI
+    listeners.forEach((l) => l());
+  });
+  store.subscribeNotes(() => {
+    snapshot = store.getAllItems(); // notes changes invalidate UI too (chips, backlinks)
     listeners.forEach((l) => l());
   });
 
@@ -101,6 +115,13 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
     removeDevice: (id) => store.removeDevice(id),
     getDevices: () => store.getDevices(),
     subscribeDevices: (listener) => store.subscribeDevices(listener),
+    createNote: (input) => store.createNote(input),
+    updateNote: (id, patch) => store.updateNote(id, patch),
+    removeNote: (id) => store.removeNote(id),
+    getNote: (id) => store.getNote(id),
+    getNotes: () => store.getNotes(),
+    subscribeNotes: (listener) => store.subscribeNotes(listener),
+    setNoteRefs: (id, noteRefs) => store.updateItem(id, { noteRefs }),
     getCalendarEvents: (rangeStart, rangeEnd) => {
       const events: CalendarEvent[] = [];
       for (const src of store.getSources()) {
@@ -145,6 +166,7 @@ export {
   type BlobIO,
 } from './files';
 export { isOnline, DEVICE_ONLINE_MS, type DeviceInfo } from './devices';
+export { slugify, titleFromSlug, parseNoteTokens, backlinks, type Note } from './notes';
 export { generateSyncKey, encryptUpdate, decryptUpdate } from './sync/crypto';
 export { makeLinkCode, parseLinkCode, normalizeHubUrl, type LinkPayload } from './sync/link';
 export { HubProvider, type SyncStatus, type HubProviderOptions } from './sync/provider';
