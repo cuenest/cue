@@ -9,6 +9,7 @@ import { QueueView } from './views/QueueView';
 import { CalendarView } from './views/CalendarView';
 import { AskView } from './views/AskView';
 import { FilesView } from './views/FilesView';
+import { NotesView } from './views/NotesView';
 import { SettingsView } from './views/SettingsView';
 import { useRoute, navigate, type Route } from './router';
 import { useSyncStatus } from './sync/manager';
@@ -16,7 +17,7 @@ import { spaceManager, useActiveSpace } from './spaces/manager';
 import { usePresence } from './devices/identity';
 import { cn } from './lib/utils';
 
-const ROUTES: Route[] = ['queue', 'calendar', 'ask', 'files', 'settings'];
+const ROUTES: Route[] = ['queue', 'calendar', 'ask', 'files', 'notes', 'settings'];
 
 function Nav({ active }: { active: Route }) {
   const syncStatus = useSyncStatus();
@@ -93,6 +94,7 @@ export function App({
         {route === 'calendar' && <CalendarView />}
         {route === 'ask' && <AskView />}
         {route === 'files' && <FilesView />}
+        {route === 'notes' && <NotesView />}
         {route === 'settings' && <SettingsView />}
 
         <Panel delay={240} className="mt-auto hidden sm:block">

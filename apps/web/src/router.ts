@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 
-export type Route = 'queue' | 'calendar' | 'ask' | 'files' | 'settings';
+export type Route = 'queue' | 'calendar' | 'ask' | 'files' | 'notes' | 'settings';
 
 function read(): Route {
   const h = window.location.hash.replace(/^#\/?/, '');
-  return h === 'calendar' || h === 'settings' || h === 'ask' || h === 'files' ? h : 'queue';
+  return h === 'calendar' || h === 'settings' || h === 'ask' || h === 'files' || h === 'notes'
+    ? h
+    : 'queue';
 }
 
 export function navigate(route: Route): void {
