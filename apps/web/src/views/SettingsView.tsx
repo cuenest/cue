@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import QRCode from 'qrcode';
 import { generateSyncKey, makeLinkCode, parseLinkCode, isOnline } from '@cue/engine';
 import { Panel } from '../components/Panel';
@@ -239,7 +239,7 @@ function CalendarsSection() {
   }
 
   return (
-    <div className="mt-6">
+    <div>
       <SectionHeader index="02" title="Calendars" />
       <div className="border border-border-strong bg-card p-4 shadow-[var(--stack-sm)]">
         {sources.length > 0 && (
@@ -398,7 +398,7 @@ function SpacesSection() {
   }
 
   return (
-    <div className="mt-6">
+    <div>
       <SectionHeader index="05" title="Shared spaces" />
       <div className="border border-border-strong bg-card p-4 shadow-[var(--stack-sm)]">
         <p className="text-sm text-muted-foreground">
@@ -525,7 +525,7 @@ function AiSection() {
   }
 
   return (
-    <div className="mt-6">
+    <div>
       <SectionHeader index="04" title="Assistant" />
       <div className="border border-border-strong bg-card p-4 shadow-[var(--stack-sm)]">
         <p className="text-sm text-muted-foreground">
@@ -573,7 +573,7 @@ function DataSection() {
   }
 
   return (
-    <div className="mt-6">
+    <div>
       <SectionHeader index="03" title="Data" />
       <div className="flex flex-wrap items-center justify-between gap-3 border border-border-strong bg-card p-4 shadow-[var(--stack-sm)]">
         <p className="text-sm text-muted-foreground">
@@ -613,7 +613,7 @@ function DevicesSection() {
     'ml-2 bg-primary px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-widest text-primary-foreground';
 
   return (
-    <section className="mb-8">
+    <section>
       <SectionHeader index="06" title="Devices in this space" />
       {devices.length === 0 ? (
         <p className="border border-dashed border-border px-4 py-6 text-center font-mono text-xs text-muted-foreground">
@@ -704,17 +704,37 @@ function DevicesSection() {
   );
 }
 
+/** Each settings section is its own Panel, so it gets the same divider (rule +
+ *  corner-dot markers) as the main Queue/Focus sections — one consistent look. */
+function SettingsSection({ delay, children }: { delay: number; children: ReactNode }) {
+  return (
+    <Panel delay={delay}>
+      <div className="px-5 py-5 sm:px-6">{children}</div>
+    </Panel>
+  );
+}
+
 export function SettingsView() {
   return (
-    <Panel delay={60}>
-      <div className="px-5 py-5 pb-8 sm:px-6">
+    <>
+      <SettingsSection delay={60}>
         <SyncSection />
+      </SettingsSection>
+      <SettingsSection delay={100}>
         <SpacesSection />
+      </SettingsSection>
+      <SettingsSection delay={140}>
         <DevicesSection />
+      </SettingsSection>
+      <SettingsSection delay={180}>
         <CalendarsSection />
+      </SettingsSection>
+      <SettingsSection delay={220}>
         <AiSection />
+      </SettingsSection>
+      <SettingsSection delay={260}>
         <DataSection />
-      </div>
-    </Panel>
+      </SettingsSection>
+    </>
   );
 }
