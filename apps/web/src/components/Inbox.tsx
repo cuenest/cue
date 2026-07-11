@@ -4,6 +4,7 @@ import { useEngine, useItems } from '../useEngine';
 import { formatDue, timeAgo } from '../lib/time';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
+import { NoteChips } from '../notes/NoteChips';
 
 type View = 'queue' | 'scheduled' | 'delegated' | 'log';
 
@@ -109,38 +110,40 @@ export function Inbox() {
                     {String(idx + 1).padStart(2, '0')}
                   </span>
 
-                  {editingId === i.id ? (
-                    <form
-                      className="min-w-0"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        saveEdit(i.id);
-                      }}
-                    >
-                      <input
-                        autoFocus
-                        aria-label="Edit item"
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        onBlur={() => setEditingId(null)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') setEditingId(null);
+                  <div className="min-w-0">
+                    {editingId === i.id ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          saveEdit(i.id);
                         }}
-                        className="w-full border-b border-border-strong bg-transparent pb-0.5 text-[15px] outline-none"
-                      />
-                    </form>
-                  ) : (
-                    <span className="flex min-w-0 items-baseline gap-2 text-[15px] leading-snug">
-                      <span className="[overflow-wrap:anywhere]">{i.body}</span>
-                      <button
-                        type="button"
-                        onClick={() => startEdit(i)}
-                        className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
                       >
-                        edit
-                      </button>
-                    </span>
-                  )}
+                        <input
+                          autoFocus
+                          aria-label="Edit item"
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          onBlur={() => setEditingId(null)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') setEditingId(null);
+                          }}
+                          className="w-full border-b border-border-strong bg-transparent pb-0.5 text-[15px] outline-none"
+                        />
+                      </form>
+                    ) : (
+                      <span className="flex items-baseline gap-2 text-[15px] leading-snug">
+                        <span className="[overflow-wrap:anywhere]">{i.body}</span>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(i)}
+                          className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                        >
+                          edit
+                        </button>
+                      </span>
+                    )}
+                    <NoteChips noteRefs={i.noteRefs} />
+                  </div>
 
                   {idx === 0 ? (
                     <span className="bg-primary px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-primary-foreground">

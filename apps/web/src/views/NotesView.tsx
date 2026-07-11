@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { backlinks, type Note } from '@cue/engine';
 import { Panel } from '../components/Panel';
 import { Button } from '../components/ui/button';
 import { useEngine, useItems } from '../useEngine';
-import { navigate } from '../router';
+import { navigate, noteIdFromHash } from '../router';
 import { Markdown } from '../notes/MarkdownView';
 import { cn } from '../lib/utils';
 import { timeAgo } from '../lib/time';
@@ -128,8 +128,18 @@ export function NotesView() {
   const engine = useEngine();
   useItems(); // re-render on note/item changes
   const notes = engine.getNotes();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => noteIdFromHash());
   const selected = selectedId ? engine.getNote(selectedId) : null;
+
+  // a chip elsewhere can deep-link to a note via #/notes/<id>
+  useEffect(() => {
+    const onHash = () => {
+      const id = noteIdFromHash();
+      if (id) setSelectedId(id);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   function newNote() {
     const n = engine.createNote({ title: 'Untitled' });
