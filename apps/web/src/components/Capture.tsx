@@ -5,9 +5,23 @@ import { useEngine, useItems } from '../useEngine';
 import { resolveNoteRefs } from '../notes/resolve';
 import { cn } from '../lib/utils';
 
-type Suggestion = { kind: 'note'; note: Note } | { kind: 'create'; slug: string };
+interface Command {
+  id: string;
+  label: string;
+  hint: string;
+  insert: string; // what typing the command expands to
+}
 
-const TOKEN_AT_CARET = /#notes:([a-zA-Z0-9-]*)$/;
+/** Slash-style commands triggered by typing "#". Extend this list to add more. */
+const COMMANDS: Command[] = [{ id: 'notes', label: 'notes', hint: 'link a note', insert: '#notes:' }];
+
+type Suggestion =
+  | { kind: 'command'; cmd: Command }
+  | { kind: 'note'; note: Note }
+  | { kind: 'create'; slug: string };
+
+const NOTE_TOKEN = /#notes:([a-zA-Z0-9-]*)$/; // #notes:<query> at the caret
+const CMD_TOKEN = /#([a-zA-Z]*)$/; // # or #<partial-command> at the caret
 
 export function Capture() {
   const engine = useEngine();
@@ -30,11 +44,14 @@ export function Capture() {
   });
 
   const before = text.slice(0, caret);
-  const match = open ? TOKEN_AT_CARET.exec(before) : null;
-  const query = match?.[1]?.toLowerCase() ?? '';
+  // note mode (#notes:<query>) takes priority; otherwise command mode (#<partial>)
+  const noteMatch = open ? NOTE_TOKEN.exec(before) : null;
+  const cmdMatch = open && !noteMatch ? CMD_TOKEN.exec(before) : null;
+  const match = noteMatch ?? cmdMatch;
 
   let suggestions: Suggestion[] = [];
-  if (match) {
+  if (noteMatch) {
+    const query = noteMatch[1]!.toLowerCase();
     const notes = engine.getNotes();
     const filtered = notes
       .filter((n) => !query || slugify(n.title).includes(query) || n.title.toLowerCase().includes(query))
@@ -42,6 +59,12 @@ export function Capture() {
       .map((n): Suggestion => ({ kind: 'note', note: n }));
     const exact = notes.some((n) => slugify(n.title) === query);
     suggestions = query && !exact ? [...filtered, { kind: 'create', slug: query }] : filtered;
+  } else if (cmdMatch) {
+    const partial = cmdMatch[1]!.toLowerCase();
+    suggestions = COMMANDS.filter((c) => c.label.startsWith(partial)).map((c): Suggestion => ({
+      kind: 'command',
+      cmd: c,
+    }));
   }
   const showMenu = !!match && suggestions.length > 0;
 
@@ -72,14 +95,19 @@ export function Capture() {
 
   function choose(s: Suggestion) {
     if (!match) return;
-    const slug = s.kind === 'note' ? slugify(s.note.title) : s.slug;
     const tokenStart = (match.index ?? 0) as number;
-    const replacement = `#notes:${slug} `;
+    // command → expand it (e.g. "#no" → "#notes:") and keep the menu open so the
+    // next-level suggestions (the notes) appear immediately.
+    const replacement =
+      s.kind === 'command'
+        ? s.cmd.insert
+        : `#notes:${s.kind === 'note' ? slugify(s.note.title) : s.slug} `;
     const next = text.slice(0, tokenStart) + replacement + text.slice(caret);
     pendingCaret.current = tokenStart + replacement.length;
     setText(next);
     setCaret(pendingCaret.current);
-    setOpen(false);
+    setHighlight(0);
+    setOpen(s.kind === 'command'); // stay open after a command, close after a note pick
     inputRef.current?.focus();
   }
 
@@ -127,7 +155,7 @@ export function Capture() {
             ref={inputRef}
             aria-label="Capture"
             autoFocus
-            placeholder="Capture anything — try #notes: to link a note"
+            placeholder="Capture anything — type # for commands"
             value={text}
             onChange={(e) => {
               setText(e.target.value);
@@ -155,7 +183,15 @@ export function Capture() {
               style={{ left: menuPos.left, top: menuPos.top, width: menuPos.width }}
             >
               {suggestions.map((s, i) => (
-              <li key={s.kind === 'note' ? s.note.id : `create-${s.slug}`}>
+              <li
+                key={
+                  s.kind === 'command'
+                    ? `cmd-${s.cmd.id}`
+                    : s.kind === 'note'
+                      ? s.note.id
+                      : `create-${s.slug}`
+                }
+              >
                 <button
                   type="button"
                   // onMouseDown (not onClick) so it fires before the input's blur
@@ -169,7 +205,16 @@ export function Capture() {
                     i === highlight ? 'bg-accent' : 'hover:bg-accent/50',
                   )}
                 >
-                  {s.kind === 'note' ? (
+                  {s.kind === 'command' ? (
+                    <>
+                      <span className="font-mono text-[11px] font-semibold text-foreground">
+                        #{s.cmd.label}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                        {s.cmd.hint}
+                      </span>
+                    </>
+                  ) : s.kind === 'note' ? (
                     <>
                       <span className="font-mono text-[11px] text-muted-foreground">#</span>
                       <span className="min-w-0 flex-1 truncate">{s.note.title}</span>
