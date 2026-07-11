@@ -4,6 +4,7 @@ import { useEngine, useItems } from '../useEngine';
 import { formatDue, timeAgo, toDatetimeLocal } from '../lib/time';
 import { useDueNotifications, notificationPermission, requestNotifications } from '../lib/notify';
 import { Button } from './ui/button';
+import { NoteChips } from '../notes/NoteChips';
 
 /** The one item being processed. Keyed by item id so state and animation reset per item. */
 function FocusCard({ item }: { item: Item }) {
@@ -44,6 +45,7 @@ function FocusCard({ item }: { item: Item }) {
       <p className="mt-3 font-mono text-[11px] text-muted-foreground">
         captured {timeAgo(item.createdAt)}
       </p>
+      <NoteChips noteRefs={item.noteRefs} />
 
       <div className="mt-7 flex flex-wrap gap-2">
         <Button onClick={() => engine.complete(item.id)}>Do now</Button>
