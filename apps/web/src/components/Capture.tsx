@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { createPortal } from 'react-dom';
 import { slugify, titleFromSlug, type Note } from '@cue/engine';
 import { useEngine, useItems } from '../useEngine';
-import { resolveNoteRefs } from '../notes/resolve';
+import { runCapture, DUE_EXAMPLES } from '../commands/resolve';
 import { cn } from '../lib/utils';
 
 interface Command {
@@ -13,14 +13,20 @@ interface Command {
 }
 
 /** Slash-style commands triggered by typing "#". Extend this list to add more. */
-const COMMANDS: Command[] = [{ id: 'notes', label: 'notes', hint: 'link a note', insert: '#notes:' }];
+const COMMANDS: Command[] = [
+  { id: 'notes', label: 'notes', hint: 'link a note', insert: '#notes:' },
+  { id: 'due', label: 'due', hint: 'schedule + remind', insert: '#due:' },
+  { id: 'to', label: 'to', hint: 'delegate to someone', insert: '#to:' },
+];
 
 type Suggestion =
   | { kind: 'command'; cmd: Command }
   | { kind: 'note'; note: Note }
-  | { kind: 'create'; slug: string };
+  | { kind: 'create'; slug: string }
+  | { kind: 'due'; expr: string };
 
 const NOTE_TOKEN = /#notes:([a-zA-Z0-9-]*)$/; // #notes:<query> at the caret
+const DUE_TOKEN = /#due:([^#]*)$/; // #due:<when> at the caret
 const CMD_TOKEN = /#([a-zA-Z]*)$/; // # or #<partial-command> at the caret
 
 export function Capture() {
@@ -44,10 +50,11 @@ export function Capture() {
   });
 
   const before = text.slice(0, caret);
-  // note mode (#notes:<query>) takes priority; otherwise command mode (#<partial>)
+  // note/due arg modes take priority; otherwise command mode (#<partial>)
   const noteMatch = open ? NOTE_TOKEN.exec(before) : null;
-  const cmdMatch = open && !noteMatch ? CMD_TOKEN.exec(before) : null;
-  const match = noteMatch ?? cmdMatch;
+  const dueMatch = open && !noteMatch ? DUE_TOKEN.exec(before) : null;
+  const cmdMatch = open && !noteMatch && !dueMatch ? CMD_TOKEN.exec(before) : null;
+  const match = noteMatch ?? dueMatch ?? cmdMatch;
 
   let suggestions: Suggestion[] = [];
   if (noteMatch) {
@@ -59,6 +66,12 @@ export function Capture() {
       .map((n): Suggestion => ({ kind: 'note', note: n }));
     const exact = notes.some((n) => slugify(n.title) === query);
     suggestions = query && !exact ? [...filtered, { kind: 'create', slug: query }] : filtered;
+  } else if (dueMatch) {
+    const q = dueMatch[1]!.toLowerCase().trim();
+    suggestions = DUE_EXAMPLES.filter((e) => !q || e.startsWith(q)).map((e): Suggestion => ({
+      kind: 'due',
+      expr: e,
+    }));
   } else if (cmdMatch) {
     const partial = cmdMatch[1]!.toLowerCase();
     suggestions = COMMANDS.filter((c) => c.label.startsWith(partial)).map((c): Suggestion => ({
@@ -97,17 +110,19 @@ export function Capture() {
     if (!match) return;
     const tokenStart = (match.index ?? 0) as number;
     // command → expand it (e.g. "#no" → "#notes:") and keep the menu open so the
-    // next-level suggestions (the notes) appear immediately.
+    // next-level suggestions appear immediately.
     const replacement =
       s.kind === 'command'
         ? s.cmd.insert
-        : `#notes:${s.kind === 'note' ? slugify(s.note.title) : s.slug} `;
+        : s.kind === 'due'
+          ? `#due:${s.expr} `
+          : `#notes:${s.kind === 'note' ? slugify(s.note.title) : s.slug} `;
     const next = text.slice(0, tokenStart) + replacement + text.slice(caret);
     pendingCaret.current = tokenStart + replacement.length;
     setText(next);
     setCaret(pendingCaret.current);
     setHighlight(0);
-    setOpen(s.kind === 'command'); // stay open after a command, close after a note pick
+    setOpen(s.kind === 'command'); // stay open after a command, close after picking an arg
     inputRef.current?.focus();
   }
 
@@ -130,11 +145,8 @@ export function Capture() {
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const body = text.trim();
-    if (!body) return;
-    const item = engine.addItem(body);
-    const refs = resolveNoteRefs(engine, body);
-    if (refs.length) engine.setNoteRefs(item.id, refs);
+    if (!text.trim()) return;
+    runCapture(engine, text); // applies #notes: / #due: / #to: and creates the item
     setText('');
     setOpen(false);
   }
@@ -189,7 +201,9 @@ export function Capture() {
                     ? `cmd-${s.cmd.id}`
                     : s.kind === 'note'
                       ? s.note.id
-                      : `create-${s.slug}`
+                      : s.kind === 'due'
+                        ? `due-${s.expr}`
+                        : `create-${s.slug}`
                 }
               >
                 <button
@@ -213,6 +227,11 @@ export function Capture() {
                       <span className="min-w-0 flex-1 truncate text-muted-foreground">
                         {s.cmd.hint}
                       </span>
+                    </>
+                  ) : s.kind === 'due' ? (
+                    <>
+                      <span className="font-mono text-[11px] text-muted-foreground">◷</span>
+                      <span className="min-w-0 flex-1 truncate">{s.expr}</span>
                     </>
                   ) : s.kind === 'note' ? (
                     <>
