@@ -2,12 +2,13 @@ import { navigate, type Route } from '../router';
 import { useSyncStatus } from '../sync/manager';
 import { cn } from '../lib/utils';
 
-const ROUTES: Route[] = ['queue', 'calendar', 'ask', 'files', 'settings'];
+const ROUTES: Route[] = ['queue', 'calendar', 'ask', 'files', 'notes', 'settings'];
 const LABELS: Record<Route, string> = {
   queue: 'Queue',
   calendar: 'Calendar',
   ask: 'Ask',
   files: 'Files',
+  notes: 'Notes',
   settings: 'Settings',
 };
 
@@ -56,6 +57,15 @@ function RouteIcon({ route, className }: { route: Route; className?: string }) {
         <svg {...common}>
           <path d="M6 3h7l5 5v13H6z" />
           <path d="M13 3v5h5" />
+        </svg>
+      );
+    case 'notes':
+      return (
+        <svg {...common}>
+          <rect x="5" y="3.5" width="14" height="17" rx="2" />
+          <line x1="8.5" y1="8" x2="15.5" y2="8" />
+          <line x1="8.5" y1="12" x2="15.5" y2="12" />
+          <line x1="8.5" y1="16" x2="13" y2="16" />
         </svg>
       );
     case 'settings':
