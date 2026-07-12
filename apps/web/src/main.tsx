@@ -26,3 +26,15 @@ if (import.meta.env.DEV) {
 createRoot(document.getElementById('root')!).render(
   <App engine={engine} persistent={persistent} />,
 );
+
+// Fade out the inline splash (index.html) once the app has mounted. Keep it up
+// for at least ~1.2s so the logo draw + dot pop play through on fast loads;
+// performance.now() ≈ time since navigation start, so slow loads add no delay.
+const splash = document.getElementById('splash');
+if (splash) {
+  const remaining = Math.max(0, 1200 - performance.now());
+  window.setTimeout(() => {
+    splash.classList.add('done');
+    window.setTimeout(() => splash.remove(), 400); // after the opacity transition
+  }, remaining);
+}
