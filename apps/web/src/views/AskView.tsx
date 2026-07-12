@@ -3,7 +3,8 @@ import { Panel } from '../components/Panel';
 import { Button } from '../components/ui/button';
 import { useEngine } from '../useEngine';
 import { navigate } from '../router';
-import { askCue, AI_KEY_STORAGE, MODEL, type ChatTurn } from '../ai/assistant';
+import { askCue, type ChatTurn } from '../ai/assistant';
+import { getAiConfig, resolveProvider } from '../ai/config';
 import { cn } from '../lib/utils';
 
 export function AskView() {
@@ -14,19 +15,28 @@ export function AskView() {
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const apiKey = localStorage.getItem(AI_KEY_STORAGE);
+  const config = getAiConfig();
+  const resolved = config ? resolveProvider(config) : null;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     const question = input.trim();
-    if (!question || busy || !apiKey) return;
+    if (!question || busy || !config || !resolved) return;
     setError(null);
     setInput('');
     const history = turns;
     setTurns((t) => [...t, { role: 'user', text: question }]);
     setBusy(true);
     try {
-      const answer = await askCue({ engine, apiKey, history, question });
+      const answer = await askCue({
+        engine,
+        apiKey: config.key,
+        dialect: resolved.provider.dialect,
+        model: resolved.model,
+        baseURL: resolved.baseURL,
+        history,
+        question,
+      });
       setTurns((t) => [...t, { role: 'assistant', text: answer }]);
     } catch (err) {
       setError(
@@ -55,14 +65,15 @@ export function AskView() {
           </span>
         </div>
 
-        {!apiKey ? (
+        {!config ? (
           <div className="flex flex-col items-center gap-3 border border-dashed border-border bg-card/50 px-6 py-14 text-center">
             <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
               No API key
             </span>
             <p className="max-w-sm text-sm text-muted-foreground">
-              The assistant uses your own Anthropic API key, stored only on this device. Requests
-              go straight from your browser to the model — no middleman.
+              The assistant uses your own API key (Anthropic, OpenAI, Groq, OpenRouter, Gemini, …),
+              stored only on this device. Requests go straight from your browser to the model — no
+              middleman.
             </p>
             <Button variant="outline" onClick={() => navigate('settings')}>
               Add a key in settings
@@ -115,8 +126,8 @@ export function AskView() {
               </Button>
             </form>
             <p className="mt-2 font-mono text-[10px] text-muted-foreground/70">
-              model {MODEL} · your data is fetched by tools on this device and only the fetched
-              slices are sent
+              {resolved?.provider.label} · {resolved?.model} · your data is fetched by tools on this
+              device and only the fetched slices are sent
             </p>
           </>
         )}

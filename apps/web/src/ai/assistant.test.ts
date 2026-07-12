@@ -98,6 +98,56 @@ describe('askCue tool loop', () => {
     expect(String(block.content)).toContain('write the report');
   });
 
+  it('openai dialect: runs the function-call loop over a fake fetch', async () => {
+    const engine = createEngine();
+    engine.addItem('write the report');
+
+    const bodies: unknown[] = [];
+    const responses = [
+      {
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_queue', arguments: '{}' } }],
+            },
+          },
+        ],
+      },
+      { choices: [{ message: { role: 'assistant', content: 'You have one item: write the report.' } }] },
+    ];
+    let i = 0;
+    const fakeFetch = (async (_url: string, init: { body: string }) => {
+      bodies.push(JSON.parse(init.body));
+      return { ok: true, json: async () => responses[i++] } as Response;
+    }) as unknown as typeof fetch;
+
+    const answer = await askCue({
+      engine,
+      apiKey: 'sk-test',
+      dialect: 'openai',
+      history: [],
+      question: 'what do I have to do?',
+      fetchImpl: fakeFetch,
+    });
+
+    expect(answer).toBe('You have one item: write the report.');
+    // the second request must carry a role:'tool' message with the executed result
+    const second = bodies[1] as { messages: Array<{ role: string; content: string; tool_call_id?: string }> };
+    const toolTurn = second.messages.find((m) => m.role === 'tool')!;
+    expect(toolTurn.tool_call_id).toBe('call_1');
+    expect(toolTurn.content).toContain('write the report');
+  });
+
+  it('openai dialect: throws a helpful error on a non-ok response', async () => {
+    const engine = createEngine();
+    const fakeFetch = (async () => ({ ok: false, status: 401, text: async () => 'bad key' }) as Response) as unknown as typeof fetch;
+    await expect(
+      askCue({ engine, apiKey: 'x', dialect: 'openai', history: [], question: 'hi', fetchImpl: fakeFetch }),
+    ).rejects.toThrow(/401/);
+  });
+
   it('gives up after too many tool rounds instead of looping forever', async () => {
     const engine = createEngine();
     const loopResponse = {
