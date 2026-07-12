@@ -9,6 +9,7 @@ import { deviceId, deviceName, setDeviceName, deviceSurface } from '../devices/i
 import { getAiConfig, setAiConfig } from '../ai/config';
 import { PROVIDERS, detectProvider, providerById } from '../ai/providers';
 import { Button } from '../components/ui/button';
+import { Select } from '../components/ui/Select';
 import { QrScanner } from '../components/QrScanner';
 import { cn } from '../lib/utils';
 import { timeAgo } from '../lib/time';
@@ -559,18 +560,13 @@ function AiSection() {
               <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                 provider
               </span>
-              <select
-                aria-label="Provider"
+              <Select
+                ariaLabel="Provider"
                 value={providerId}
-                onChange={(e) => setProviderId(e.target.value)}
-                className={cn(inputStyle, 'min-w-40')}
-              >
-                {PROVIDERS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+                onChange={setProviderId}
+                options={PROVIDERS.map((p) => ({ value: p.id, label: p.label }))}
+                className="min-w-44"
+              />
             </label>
             <input
               aria-label="Model"
