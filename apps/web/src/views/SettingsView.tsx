@@ -10,6 +10,7 @@ import { getAiConfig, setAiConfig } from '../ai/config';
 import { PROVIDERS, detectProvider, providerById } from '../ai/providers';
 import { Button } from '../components/ui/button';
 import { Select } from '../components/ui/Select';
+import { CopyButton } from '../components/CopyButton';
 import { QrScanner } from '../components/QrScanner';
 import { cn } from '../lib/utils';
 import { timeAgo } from '../lib/time';
@@ -167,13 +168,7 @@ function SyncSection() {
                   <code className="max-w-full overflow-x-auto whitespace-nowrap border border-border bg-background px-2 py-1 font-mono text-[10px]">
                     {linkCode}
                   </code>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void navigator.clipboard?.writeText(linkCode)}
-                  >
-                    Copy
-                  </Button>
+                  <CopyButton text={linkCode} />
                 </div>
               </div>
             )}
@@ -315,7 +310,7 @@ function CalendarsSection() {
             placeholder="https://…/basic.ics"
             className="h-9 min-w-56 flex-1 rounded-[2px] border border-border bg-transparent px-2 font-mono text-xs outline-none focus:border-border-strong"
           />
-          <Button variant="outline" disabled={busy} onClick={() => void fetchUrl()}>
+          <Button variant="outline" disabled={busy || !url.trim()} onClick={() => void fetchUrl()}>
             {busy ? 'Fetching…' : 'Fetch URL'}
           </Button>
           <label className="inline-flex cursor-pointer">
@@ -445,13 +440,7 @@ function SpacesSection() {
               <code className="max-w-full overflow-x-auto whitespace-nowrap border border-border bg-background px-2 py-1 font-mono text-[10px]">
                 {invite}
               </code>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void navigator.clipboard?.writeText(invite)}
-              >
-                Copy
-              </Button>
+              <CopyButton text={invite} />
             </div>
           </div>
         )}
@@ -518,21 +507,23 @@ function AiSection() {
   const [providerId, setProviderId] = useState(initial?.providerId ?? 'anthropic');
   const [model, setModel] = useState(initial?.model ?? '');
   const [baseURL, setBaseURL] = useState(initial?.baseURL ?? '');
-  const [saved, setSaved] = useState(false);
+  const [feedback, setFeedback] = useState<'idle' | 'saved' | 'cleared'>('idle');
 
   const provider = providerById(providerId);
+  const hasKey = key.trim().length > 0;
   const inputStyle =
     'h-9 rounded-[2px] border border-border bg-transparent px-2 font-mono text-xs outline-none focus:border-border-strong';
 
   function onKeyChange(v: string) {
     setKey(v);
+    setFeedback('idle');
     if (v.trim()) setProviderId(detectProvider(v).id); // auto-detect; overridable below
   }
 
   function save() {
-    setAiConfig(key.trim() ? { key: key.trim(), providerId, model, baseURL } : null);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
+    setAiConfig(hasKey ? { key: key.trim(), providerId, model, baseURL } : null);
+    setFeedback(hasKey ? 'saved' : 'cleared');
+    setTimeout(() => setFeedback('idle'), 1500);
   }
 
   return (
@@ -587,10 +578,14 @@ function AiSection() {
           )}
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={save}>
-              {saved ? 'Saved' : 'Save'}
+              {feedback === 'saved' ? 'Saved ✓' : feedback === 'cleared' ? 'Cleared' : 'Save'}
             </Button>
             <span className="font-mono text-[10px] text-muted-foreground">
-              {provider.dialect === 'anthropic' ? 'Anthropic API' : 'OpenAI-compatible API'}
+              {hasKey
+                ? provider.dialect === 'anthropic'
+                  ? 'Anthropic API'
+                  : 'OpenAI-compatible API'
+                : 'paste a key to enable the assistant'}
             </span>
           </div>
         </div>
