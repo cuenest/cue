@@ -134,15 +134,30 @@ export function defaultClientFactory(apiKey: string): MessagesClient {
   return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 }
 
-export async function askCue(opts: {
+const OUT_OF_ROUNDS =
+  'I could not finish answering — too many lookup rounds. Try a more specific question.';
+
+export interface AskOpts {
   engine: CueEngine;
   apiKey: string;
   history: ChatTurn[];
   question: string;
+  /** 'anthropic' (default) or 'openai' (any OpenAI-compatible endpoint). */
+  dialect?: 'anthropic' | 'openai';
+  model?: string;
+  baseURL?: string;
+  /** Injectable for tests (anthropic dialect). */
   clientFactory?: (apiKey: string) => MessagesClient;
-}): Promise<string> {
-  const client = (opts.clientFactory ?? defaultClientFactory)(opts.apiKey);
+  /** Injectable for tests (openai dialect). */
+  fetchImpl?: typeof fetch;
+}
 
+export async function askCue(opts: AskOpts): Promise<string> {
+  return (opts.dialect ?? 'anthropic') === 'openai' ? askOpenAI(opts) : askAnthropic(opts);
+}
+
+async function askAnthropic(opts: AskOpts): Promise<string> {
+  const client = (opts.clientFactory ?? defaultClientFactory)(opts.apiKey);
   const messages: Anthropic.MessageParam[] = [
     ...opts.history.map((t) => ({ role: t.role, content: t.text })),
     { role: 'user' as const, content: opts.question },
@@ -150,7 +165,7 @@ export async function askCue(opts: {
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     const response = await client.messages.create({
-      model: MODEL,
+      model: opts.model || MODEL,
       max_tokens: 4096,
       thinking: { type: 'adaptive' },
       system: systemPrompt(),
@@ -167,7 +182,6 @@ export async function askCue(opts: {
       return text || '(no answer)';
     }
 
-    // execute every requested tool locally, return all results in one user turn
     messages.push({ role: 'assistant', content: response.content });
     const results: Anthropic.ToolResultBlockParam[] = response.content
       .filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
@@ -178,6 +192,70 @@ export async function askCue(opts: {
       }));
     messages.push({ role: 'user', content: results });
   }
+  return OUT_OF_ROUNDS;
+}
 
-  return 'I could not finish answering — too many lookup rounds. Try a more specific question.';
+// ---- OpenAI-compatible dialect (raw fetch, function-calling) ---------------
+
+interface OAToolCall {
+  id: string;
+  function: { name: string; arguments: string };
+}
+interface OAMessage {
+  role: string;
+  content?: string | null;
+  tool_calls?: OAToolCall[];
+}
+
+const OPENAI_TOOLS = TOOLS.map((t) => ({
+  type: 'function' as const,
+  function: { name: t.name, description: t.description, parameters: t.input_schema },
+}));
+
+function safeJson(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return {};
+  }
+}
+
+async function askOpenAI(opts: AskOpts): Promise<string> {
+  const doFetch = opts.fetchImpl ?? fetch;
+  const baseURL = (opts.baseURL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  const model = opts.model || 'gpt-4o';
+  const messages: OAMessage[] = [
+    { role: 'system', content: systemPrompt() },
+    ...opts.history.map((t) => ({ role: t.role, content: t.text })),
+    { role: 'user', content: opts.question },
+  ];
+
+  for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+    const res = await doFetch(`${baseURL}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${opts.apiKey}` },
+      body: JSON.stringify({ model, messages, tools: OPENAI_TOOLS, tool_choice: 'auto' }),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`AI request failed (${res.status}). ${detail.slice(0, 200)}`);
+    }
+    const data = (await res.json()) as { choices?: { message?: OAMessage }[] };
+    const msg = data.choices?.[0]?.message;
+    if (!msg) return '(no answer)';
+
+    if (msg.tool_calls?.length) {
+      messages.push(msg);
+      for (const call of msg.tool_calls) {
+        messages.push({
+          role: 'tool',
+          content: executeTool(opts.engine, call.function.name, safeJson(call.function.arguments)),
+          ...({ tool_call_id: call.id } as object),
+        });
+      }
+      continue;
+    }
+    return (msg.content ?? '').trim() || '(no answer)';
+  }
+  return OUT_OF_ROUNDS;
 }

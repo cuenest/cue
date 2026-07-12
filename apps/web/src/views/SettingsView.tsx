@@ -6,6 +6,8 @@ import { useEngine, useItems } from '../useEngine';
 import { syncManager, useSyncStatus, DEFAULT_HUB, type SyncConfig } from '../sync/manager';
 import { spaceManager, useActiveSpace } from '../spaces/manager';
 import { deviceId, deviceName, setDeviceName, deviceSurface } from '../devices/identity';
+import { getAiConfig, setAiConfig } from '../ai/config';
+import { PROVIDERS, detectProvider, providerById } from '../ai/providers';
 import { Button } from '../components/ui/button';
 import { QrScanner } from '../components/QrScanner';
 import { cn } from '../lib/utils';
@@ -510,18 +512,26 @@ function SpacesSection() {
 }
 
 function AiSection() {
-  const [key, setKey] = useState(() => localStorage.getItem('cue-ai-key') ?? '');
+  const initial = getAiConfig();
+  const [key, setKey] = useState(initial?.key ?? '');
+  const [providerId, setProviderId] = useState(initial?.providerId ?? 'anthropic');
+  const [model, setModel] = useState(initial?.model ?? '');
+  const [baseURL, setBaseURL] = useState(initial?.baseURL ?? '');
   const [saved, setSaved] = useState(false);
 
+  const provider = providerById(providerId);
+  const inputStyle =
+    'h-9 rounded-[2px] border border-border bg-transparent px-2 font-mono text-xs outline-none focus:border-border-strong';
+
+  function onKeyChange(v: string) {
+    setKey(v);
+    if (v.trim()) setProviderId(detectProvider(v).id); // auto-detect; overridable below
+  }
+
   function save() {
-    try {
-      if (key.trim()) localStorage.setItem('cue-ai-key', key.trim());
-      else localStorage.removeItem('cue-ai-key');
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1500);
-    } catch {
-      /* private mode */
-    }
+    setAiConfig(key.trim() ? { key: key.trim(), providerId, model, baseURL } : null);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
   }
 
   return (
@@ -529,30 +539,64 @@ function AiSection() {
       <SectionHeader index="04" title="Assistant" />
       <div className="border border-border-strong bg-card p-4 shadow-[var(--stack-sm)]">
         <p className="text-sm text-muted-foreground">
-          The assistant uses your own Anthropic API key. It is stored only on this device and
-          never synced; requests go directly from your browser to the model. Get a key at{' '}
-          <a
-            href="https://console.anthropic.com"
-            target="_blank"
-            rel="noreferrer"
-            className="underline underline-offset-2 hover:text-foreground"
-          >
-            console.anthropic.com
-          </a>
-          .
+          Bring your own API key — <span className="text-foreground">Anthropic, OpenAI, Groq,
+          OpenRouter, Gemini</span>, or any OpenAI-compatible endpoint. It is stored only on this
+          device and never synced; requests go straight from your browser to the model. Paste the
+          key and we detect the provider (adjust it if needed).
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+
+        <div className="mt-3 space-y-2">
           <input
-            aria-label="Anthropic API key"
+            aria-label="API key"
             type="password"
             value={key}
-            onChange={(e) => setKey(e.target.value)}
-            placeholder="sk-ant-…"
-            className="h-9 min-w-56 flex-1 rounded-[2px] border border-border bg-transparent px-2 font-mono text-xs outline-none focus:border-border-strong"
+            onChange={(e) => onKeyChange(e.target.value)}
+            placeholder={provider.keyHint}
+            className={cn(inputStyle, 'w-full')}
           />
-          <Button variant="outline" onClick={save}>
-            {saved ? 'Saved' : 'Save key'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <label className="flex items-center gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                provider
+              </span>
+              <select
+                aria-label="Provider"
+                value={providerId}
+                onChange={(e) => setProviderId(e.target.value)}
+                className={cn(inputStyle, 'min-w-40')}
+              >
+                {PROVIDERS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <input
+              aria-label="Model"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder={`model (${provider.defaultModel || 'e.g. gpt-4o'})`}
+              className={cn(inputStyle, 'min-w-44 flex-1')}
+            />
+          </div>
+          {providerId === 'custom' && (
+            <input
+              aria-label="Base URL"
+              value={baseURL}
+              onChange={(e) => setBaseURL(e.target.value)}
+              placeholder="https://…/v1  (OpenAI-compatible base URL)"
+              className={cn(inputStyle, 'w-full')}
+            />
+          )}
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={save}>
+              {saved ? 'Saved' : 'Save'}
+            </Button>
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {provider.dialect === 'anthropic' ? 'Anthropic API' : 'OpenAI-compatible API'}
+            </span>
+          </div>
         </div>
       </div>
     </div>
