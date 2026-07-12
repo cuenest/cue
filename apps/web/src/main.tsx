@@ -28,11 +28,12 @@ createRoot(document.getElementById('root')!).render(
 );
 
 // Fade out the inline splash (index.html) once the app has mounted. Keep it up
-// for at least ~1.2s so the logo draw + dot pop play through on fast loads;
-// performance.now() ≈ time since navigation start, so slow loads add no delay.
+// long enough for the full sequence (spin-unfurl → dot drop → wordmark) to play
+// on fast loads; performance.now() ≈ time since navigation start, so slow loads
+// add no extra delay.
 const splash = document.getElementById('splash');
 if (splash) {
-  const remaining = Math.max(0, 1200 - performance.now());
+  const remaining = Math.max(0, 1900 - performance.now());
   window.setTimeout(() => {
     splash.classList.add('done');
     window.setTimeout(() => splash.remove(), 400); // after the opacity transition
