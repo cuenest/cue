@@ -32,9 +32,12 @@
     />
     <style>
       /* Splash: inline (no JS/bundle needed) so it paints instantly while the
-         app loads. The C draws itself, the cue-dot pops in, then pulses until
-         React mounts and fades it out (see main.tsx). Colors are hardcoded
-         because the theme CSS lives in the bundle that hasn't loaded yet. */
+         app loads. Sequence: the arc starts as a spinning loader that unfurls
+         into the C as it decelerates → the cue-dot free-falls into the C's
+         mouth, squashes on impact (the mark recoils) and rebounds → the
+         wordmark letters rise in staggered → the dot idles with a pulse until
+         React mounts and fades the splash out (see main.tsx). Colors are
+         hardcoded because the theme CSS lives in the not-yet-loaded bundle. */
       #splash {
         position: fixed;
         inset: 0;
@@ -54,31 +57,42 @@
         opacity: 0;
         pointer-events: none;
       }
-      #splash svg {
-        width: 92px;
-        height: 92px;
+      #splash .mark {
+        width: 96px;
+        height: 96px;
+        overflow: visible;
+        /* recoil when the dot lands (timed to the impact inside splash-drop) */
+        animation: splash-impact 0.28s ease-out 1.38s;
+      }
+      /* the arc spins ~1¾ turns while unfurling from a short loader dash into
+         the full C — a loading spinner that becomes the logo */
+      #splash .spin {
+        transform-origin: 259px 256px; /* the C's own circle center */
+        animation: splash-spin 1.1s cubic-bezier(0.16, 0.6, 0.2, 1) forwards;
       }
       #splash .c {
         fill: none;
         stroke: #1d1b16;
         stroke-width: 44;
         stroke-linecap: round;
-        stroke-dasharray: 100;
-        stroke-dashoffset: 100;
-        animation: splash-draw 0.8s cubic-bezier(0.65, 0, 0.35, 1) 0.15s forwards;
+        stroke-dasharray: 12 88;
+        animation: splash-unfurl 1.1s cubic-bezier(0.16, 0.6, 0.2, 1) forwards;
       }
       html.dark #splash .c {
         stroke: #ece7da;
       }
+      /* the dot drops in from above, squashes on landing, hops, settles */
       #splash .dot {
         fill: #ffd21e;
         stroke: #1d1b16;
         stroke-width: 10;
-        transform-origin: 356px 256px;
-        transform: scale(0);
+        transform-box: fill-box;
+        transform-origin: 50% 100%;
+        opacity: 0;
+        transform: translateY(-300px);
         animation:
-          splash-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) 0.9s forwards,
-          splash-pulse 1.6s ease-in-out 1.6s infinite;
+          splash-drop 0.62s linear 1.05s forwards,
+          splash-pulse 1.8s ease-in-out 2.3s infinite;
       }
       html.dark #splash .dot {
         stroke: #ece7da;
@@ -89,20 +103,77 @@
         letter-spacing: 0.35em;
         text-transform: uppercase;
         color: #1d1b16;
-        opacity: 0;
-        animation: splash-fade-in 0.4s ease 1.1s forwards;
       }
       html.dark #splash .word {
         color: #ece7da;
       }
-      @keyframes splash-draw {
+      #splash .word i {
+        font-style: normal;
+        display: inline-block;
+        opacity: 0;
+        transform: translateY(10px);
+        animation: splash-rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+      #splash .word i:nth-child(1) {
+        animation-delay: 1.5s;
+      }
+      #splash .word i:nth-child(2) {
+        animation-delay: 1.6s;
+      }
+      #splash .word i:nth-child(3) {
+        animation-delay: 1.7s;
+      }
+      @keyframes splash-spin {
+        from {
+          transform: rotate(630deg);
+        }
         to {
-          stroke-dashoffset: 0;
+          transform: rotate(0deg);
         }
       }
-      @keyframes splash-pop {
+      @keyframes splash-unfurl {
+        from {
+          stroke-dasharray: 12 88;
+        }
         to {
-          transform: scale(1);
+          stroke-dasharray: 100 0;
+        }
+      }
+      @keyframes splash-drop {
+        0% {
+          opacity: 0;
+          transform: translateY(-300px);
+          animation-timing-function: cubic-bezier(0.45, 0, 1, 0.55); /* gravity */
+        }
+        8% {
+          opacity: 1;
+        }
+        52% {
+          transform: translateY(0) scale(1, 1); /* impact */
+          animation-timing-function: ease-out;
+        }
+        66% {
+          transform: translateY(0) scale(1.32, 0.64); /* squash */
+          animation-timing-function: ease-in-out;
+        }
+        84% {
+          transform: translateY(-12px) scale(0.94, 1.08); /* rebound hop */
+          animation-timing-function: ease-in;
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0) scale(1, 1);
+        }
+      }
+      @keyframes splash-impact {
+        0% {
+          transform: translateY(0);
+        }
+        40% {
+          transform: translateY(4px);
+        }
+        100% {
+          transform: translateY(0);
         }
       }
       @keyframes splash-pulse {
@@ -111,37 +182,49 @@
           transform: scale(1);
         }
         50% {
-          transform: scale(1.18);
+          transform: scale(1.16);
         }
       }
-      @keyframes splash-fade-in {
+      @keyframes splash-rise {
         to {
           opacity: 1;
+          transform: translateY(0);
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        #splash .c {
+        #splash .mark,
+        #splash .spin,
+        #splash .c,
+        #splash .dot,
+        #splash .word i {
           animation: none;
-          stroke-dashoffset: 0;
+        }
+        #splash .spin {
+          transform: none;
+        }
+        #splash .c {
+          stroke-dasharray: 100 0;
         }
         #splash .dot {
-          animation: none;
-          transform: scale(1);
-        }
-        #splash .word {
-          animation: none;
           opacity: 1;
+          transform: none;
+        }
+        #splash .word i {
+          opacity: 1;
+          transform: none;
         }
       }
     </style>
   </head>
   <body>
     <div id="splash" aria-hidden="true">
-      <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-        <path class="c" d="M 352 168 A 128 128 0 1 0 352 344" pathLength="100" />
+      <svg class="mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <g class="spin">
+          <path class="c" d="M 352 168 A 128 128 0 1 0 352 344" pathLength="100" />
+        </g>
         <circle class="dot" cx="356" cy="256" r="30" />
       </svg>
-      <span class="word">cue</span>
+      <span class="word"><i>c</i><i>u</i><i>e</i></span>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
