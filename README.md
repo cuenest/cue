@@ -1,47 +1,63 @@
 # Cue
 
-**The core monorepo for Cue — a local-first, zero-knowledge application for capturing, processing, and organizing what matters, with no account and no server able to read your data.**
+**A local-first, zero-knowledge app for capturing anything and processing it one item at a time — notes, a master calendar, encrypted file transfer, and an AI assistant, across all your devices, with no account and no server able to read your data.**
 
-This repository contains the shared engine, the shared interface components, and every platform application. It is the heart of the project; the organization-wide overview lives at [github.com/cuenest](https://github.com/cuenest).
-
----
-
-## What is in this repository
-
-Cue is built as a single monorepo rather than a separate repository per platform. All platform applications — web, desktop, mobile, and browser extension — depend on one shared engine and one shared interface library. A change to the core logic therefore applies everywhere at once, and a contributor needs to clone and install only one project to run the entire system.
-
-This repository is open source. The hosted synchronization service and billing are kept in a separate, private repository (`cue-cloud`), because they constitute the business rather than the software. Everything that touches user data, and every feature, is here and runs on the user's device.
+This is the core monorepo: the shared engine, every platform application, and the self-hostable sync hub. The organization-wide overview lives at [github.com/cuenest](https://github.com/cuenest).
 
 ---
 
-## Architecture
+## Why Cue
 
-Cue is organized in layers, with a strict dependency direction: platform applications depend on the engine, never the reverse. The engine contains no interface code and makes no assumptions about how it is displayed or how it synchronizes.
+Most task apps become a second job: sorting, tagging, and re-ordering a growing pile. Cue is built on a different discipline — **capture instantly, then process one item at a time**. There is no pile to curate. Each item is resolved by exactly one action: do it now, schedule it, delegate it, or drop it.
 
-```
-  Surfaces            apps/web, apps/desktop, apps/mobile, apps/extension
-  (React)             Thin platform shells. Render the engine; hold no business logic.
-       |
-       v
-  Engine              packages/engine
-  (TypeScript)        Queue and item model, replicated documents, identity,
-                      encryption, and a pluggable synchronization interface.
-       |
-       v
-  Storage             Per-device persistence of the replicated document.
-       |
-       v
-  Sync transport      Local network, self-hosted node, or hosted relay.
-  (pluggable)         Carries only encrypted data.
-```
+Around that core loop, Cue adds the things a capture tool actually needs:
 
-This separation is deliberate. Because the engine is independent of any interface and any transport, the same core can power four platforms and several synchronization modes without duplication, and contributors can work on the queue logic without touching cryptography, or on a platform shell without understanding the sync internals.
+- **No account.** Devices link by scanning a QR code or pasting a short code. Identity never touches a server.
+- **Local-first.** Every device holds a complete replica of your data and works fully offline. Sync is a convenience, not a dependency.
+- **Zero-knowledge sync.** Data is encrypted on your device before it leaves. The relay in the middle stores and forwards ciphertext it cannot read — whether you run it yourself or use a hosted one.
+- **Open source.** Everything that touches user data is in this repository, under AGPL-3.0.
 
-### Core concepts
+---
 
-- **Items and the queue.** Everything you capture is an item that begins in a single inbox. The engine presents items one at a time, oldest first, with the ability to promote any item to the front. Each item is resolved by exactly one action: complete, schedule, delegate, or drop.
-- **Local-first replicas.** Each device holds a complete copy of the data, modeled as a conflict-free replicated data type. Edits made independently — including offline — merge deterministically when devices reconnect. No central server is required for correctness.
-- **Zero-knowledge identity and sync.** Identity is a key pair generated on the device; there is no account. Devices are linked by exchanging keys through a scanned QR code. Synchronized data is encrypted before it leaves the device, so any relay forwards only data it cannot read.
+## What it does today
+
+### Capture and the queue
+A single input captures anything. Typing `#` opens a command palette that enriches the item as you type:
+
+- `#notes:<name>` links the item to a note, with autocomplete over existing notes and inline creation of new ones.
+- `#due:<when>` schedules it with natural language — `#due:tomorrow`, `#due:fri 9:30am`, `#due:in 2 hours` — and fires a reminder notification when it comes due.
+- `#to:<who>` delegates it.
+
+Processing happens in the Focus view: one card, oldest first, four ways out (do, schedule, delegate, drop), with keyboard shortcuts and undo. The inbox shows the queue, the scheduled, the delegated, and the log.
+
+### Notes
+Notes are persistent reference material, distinct from queue items. They render a safe markdown subset — headings, lists, quotes, code, links, images and video by URL — and are linked two ways: an item shows chips for the notes it references, and a note lists every item that references it. Because notes sync into shared spaces, rendering is sanitized by construction (markdown parses to React nodes, never raw HTML; URLs pass an allow-list).
+
+### Master calendar
+Import any calendar as a read-only ICS feed (Google, Outlook, and Apple all export one) and see it merged with your own scheduled items in one month view and agenda. Imported events are visually distinct and locked; recurrence rules are expanded by the engine.
+
+### Files
+Send files of any size between devices in a space. Files are split into content-addressed chunks, encrypted, and stored on the hub; only the small manifest lives in the synced document, so bytes move on demand instead of replicating to every device. Media previews stream — a Service Worker fetches, decrypts, and range-serves chunks so a video plays without downloading fully. "Keep offline" pins a file's chunks into local storage so it opens and downloads even when the hub is down.
+
+### Shared spaces and devices
+A space is a separate encrypted world — its own queue, calendar, notes, and files — shared with whoever holds its invite code (shown as a QR, scannable in-app with the camera). Settings lists every device in a space with live presence, and each device can be named.
+
+### Assistant
+Ask questions about your own data — "what's on my plate today?", "did I capture anything about the dentist?" — answered by a model using your own API key, called directly from the browser with no middleman. Any Anthropic key or any OpenAI-compatible key works (OpenAI, Groq, OpenRouter, Gemini, DeepSeek, Ollama, or a custom endpoint); paste a key and the provider is detected automatically. The model never receives a data dump: it requests exactly what it needs through tools that execute locally, and only those slices are sent.
+
+### The web app is an installable PWA
+Open the deployed site, choose "Install" or "Add to Home Screen", and Cue runs as an app with its own icon, an animated launch screen, and full offline capability — the service worker caches the shell, and the data was always local. On phones, navigation moves to a bottom tab bar.
+
+---
+
+## How sync works
+
+- **Spaces and hubs.** A space names one hub — a small relay that stores and forwards encrypted updates. Devices in a space connect to that hub; each keeps a full local replica (a Yjs CRDT document), so concurrent and offline edits merge deterministically when devices reconnect. If a space's hub is unreachable, every device keeps working; they converge when it returns. Switching a space to a different hub is always safe, because replicas re-push on connect.
+- **Link codes.** Creating a space generates a random room id and a random 256-bit key. Both travel inside the QR/link code, never through the hub. The hub learns which room to relay for — it never learns the key, so it stores ciphertext it cannot open.
+- **Encryption.** Updates and file chunks are encrypted with AES-256-GCM. Every ciphertext is self-describing — a leading suite byte names the algorithm that produced it — so future cipher suites (including post-quantum constructions for the planned per-person key layer) can be introduced without migrating existing data.
+- **Trust model, stated honestly.** Today a space is a shared vault: everyone holding the invite code has equal read/write access, so share it like a house key. A membership model with per-person keys — enabling revocation and attribution — is designed and planned; it wraps the existing shared key rather than replacing the data encryption.
+
+You can run the hub anywhere Node runs, host it on a free cloud instance, or turn the desktop app into one (see below). One hub can serve many users: rooms are isolated and the content is ciphertext either way.
 
 ---
 
@@ -50,81 +66,57 @@ This separation is deliberate. Because the engine is independent of any interfac
 ```
 cue/
   packages/
-    engine/        Shared core logic. No interface, no network assumptions.
-    ui/            Shared React components used by every surface.
+    engine/        Shared core: items and queue, notes, calendar, files,
+                   devices, replicated store, crypto, link codes, sync provider.
+                   No interface code, no network assumptions.
+    ui/            Placeholder for components shared across surfaces
+                   (components currently live in apps/web while the design settles).
   apps/
-    web/           Browser application (the first surface).
-    desktop/       Windows, macOS, and Linux application.
-    mobile/        iOS and Android application.
-    extension/     Browser extension for quick capture.
-    hub/           Headless, self-hostable synchronization node.
+    web/           The primary application: installable, offline-capable PWA.
+    desktop/       Electron shell around the web app, with a global capture
+                   hotkey (Alt+Shift+C) and an optional hub mode.
+    extension/     Browser extension (WXT, MV3): quick-capture popup and
+                   right-click capture; syncs as its own device via a link code.
+    mobile/        Capacitor wrapper for Android and (later) iOS.
+    hub/           Self-hostable sync node: WebSocket relay for encrypted
+                   updates plus an HTTP blob store for encrypted file chunks,
+                   on one port. Also embeddable as a library.
 ```
 
-| Package or application | Responsibility |
-| --- | --- |
-| `packages/engine` | The item and queue model, replicated documents, identity, encryption, and the synchronization interface. The most isolated and most testable part of the system, and the recommended place to begin contributing. |
-| `packages/ui` | Presentation-only React components — capture input, the focus view, the inbox list — shared across all surfaces. |
-| `apps/web` | The browser application, and the first platform to be built. Persists locally and runs entirely offline. |
-| `apps/desktop` | A native desktop build of the shared interface, with a global capture shortcut. A desktop left running is a natural always-on node for a household. |
-| `apps/mobile` | A native mobile build, integrating with the system share sheet and camera for device linking. |
-| `apps/extension` | Quick capture from any web page, reusing the shared components. |
-| `apps/hub` | A user-runnable node with no interface that relays encrypted data between devices and retains an encrypted backup. The free alternative to the hosted relay. |
+The dependency direction is strict: applications depend on the engine, never the reverse. The engine is pure TypeScript over a replicated document — the queue rules, note linking, calendar expansion, chunked file transfer, and crypto are all unit-tested in isolation, with no browser required.
 
 ---
 
 ## Getting started
 
-> The project is in early development. The workspace is being scaffolded as part of the first phase; the commands below describe the intended developer workflow.
-
-### Prerequisites
-
-- Node.js (current LTS) and the pnpm package manager.
-
-### Install and run
+Prerequisites: Node.js (current LTS) and pnpm (`corepack enable`).
 
 ```bash
 git clone https://github.com/cuenest/cue.git
 cd cue
-pnpm install        # install all workspace dependencies
-pnpm dev            # run the web application in development
-pnpm test           # run the test suite
+pnpm install          # one install for the whole workspace
+pnpm dev              # runs everything: web (localhost:5178), hub (4444),
+                      # extension dev build, desktop shell
 ```
 
-A single install brings up the entire workspace. You do not need to install or build packages individually.
+To run only what you need:
 
----
+```bash
+pnpm --filter @cue/web dev        # just the web app
+pnpm --filter @cue/hub dev        # just a local sync hub on :4444
+pnpm --filter @cue/extension dev  # extension → load .output/chrome-mv3-dev unpacked
+pnpm --filter @cue/desktop dev    # Electron shell against the web dev server
+```
 
-## Development
-
-### Where to make changes
-
-- Logic that defines behavior — how the queue orders items, how documents merge, how data is encrypted — belongs in `packages/engine`.
-- Anything visual belongs in `packages/ui` or in a specific application under `apps/`.
-- Platform applications should remain thin: they render the engine and the shared components, and contain as little logic of their own as possible.
-
-### Conventions
-
-- The engine must not import React, access the DOM, or assume a network. If a change to the engine seems to need any of those, the design needs revisiting.
-- Local-first and zero-knowledge behavior are requirements, not options. No feature may depend on a server being able to read user data.
-- The codebase is TypeScript throughout. Match the style of the surrounding code.
-
-### Testing
-
-The engine is composed of pure logic over a replicated document and is tested directly, without an interface. Ordering rules, the four processing actions, document merges across replicas, and encryption round-trips are all unit-testable in isolation. New engine behavior should be developed test-first.
+Quality gates, run from the root: `pnpm test` (Vitest across all packages), `pnpm typecheck`, `pnpm build`. CI runs all three on every push.
 
 ---
 
 ## Deploy
 
-Cue is two deployable pieces: a **sync hub** (a small Node service that relays and
-stores *ciphertext only*) and the **web app** (a static site). They are wired
-together by [`render.yaml`](render.yaml) as a one-click Render blueprint, but
-nothing is Render-specific — the hub is a plain Node process and the web app is
-static files.
+Cue deploys as two pieces: the **hub** (a small Node service that relays and stores ciphertext only) and the **web app** (a static site). [`render.yaml`](render.yaml) wires both as a one-click Render blueprint, but nothing is Render-specific.
 
-**One-click (Render):** push the repo, then create a new **Blueprint** pointing at
-it. It provisions `cue-hub` (web service) and `cue-web` (static site), and injects
-the hub's public host into the web build as the default sync target.
+**One-click (Render):** create a Blueprint pointing at this repository. It provisions `cue-hub` (web service) and `cue-web` (static site) with the hub URL baked into the web build.
 
 **Manual / self-host:**
 
@@ -136,46 +128,44 @@ PORT=4444 CUE_HUB_DATA=./data pnpm --filter @cue/hub start
 VITE_DEFAULT_HUB=wss://your-hub.example.com pnpm --filter @cue/web build
 ```
 
-`VITE_DEFAULT_HUB` accepts a full `ws(s)://` URL or a bare host (treated as
-`wss://`). It only sets the **default** shown when creating a space — every space
-can override its hub in Settings, so one build can talk to many hubs.
+`VITE_DEFAULT_HUB` accepts a full `ws(s)://` URL or a bare host (treated as `wss://`). It only sets the default offered when creating a space — every space can point at a different hub in Settings, so one build can talk to many hubs.
 
-**Durability:** on Render's free tier the hub disk is ephemeral, so rooms and file
-blobs are wiped on redeploy. This is usually fine — every device keeps a full
-local replica and re-pushes on reconnect; only unpinned files with no online
-holder can be lost. For durable storage, attach a persistent disk (the block is
-pre-written and commented in `render.yaml`).
+**Durability:** on a free tier the hub's disk is ephemeral, so relay state and file chunks are wiped on redeploy. This is usually harmless — every device holds a full replica and re-pushes on reconnect — but a file whose bytes existed only on the hub is lost unless some device pinned it. For durable file storage, attach a persistent disk (a commented block in `render.yaml`) or self-host.
 
-**Other surfaces** inherit the same hub. The **desktop** app bundles the web
-build, so building the web app with `VITE_DEFAULT_HUB` set before packaging is
-enough. The **browser extension** takes `VITE_DEFAULT_HUB` (fallback hub, since a
-pasted link code's hub always wins) and `VITE_APP_URL` (where "open cue →" points)
-at build time — see [`apps/extension/.env.example`](apps/extension/.env.example).
+**Other surfaces** inherit the hub. The desktop app bundles the web build, so building the web app with `VITE_DEFAULT_HUB` set is enough. The extension takes `VITE_DEFAULT_HUB` (a fallback — the hub inside a pasted link code always wins) and `VITE_APP_URL` at build time; see [`apps/extension/.env.example`](apps/extension/.env.example).
 
 ---
 
-## Project status and roadmap
+## Development conventions
 
-Cue is in early development. The work is divided into phases, each independently usable.
+- The engine must not import React, touch the DOM, or assume a network. If an engine change seems to need any of those, the design needs revisiting.
+- Local-first and zero-knowledge are requirements, not options. No feature may depend on a server reading user data.
+- Engine behavior is developed test-first. Anything rendered from synced content is treated as untrusted input.
+- Floating interface elements (menus, dialogs, overlays) render through portals so they are never clipped by layout containers.
+- TypeScript throughout. Match the style of the surrounding code.
 
-| Phase | Scope | State |
-| --- | --- | --- |
-| 0 | Single-device capture and the processing queue | Shipped (web) |
-| 1 | Multi-device synchronization, link codes/QR, and the self-hosted node | Working — encrypted sync between browsers via `apps/hub` |
-| 2 | Master calendar with multi-source import | Working — ICS import, recurrence expansion, month view |
-| 3 | Shared spaces + secure file transfer | Working — chunked content-addressed transfer via hub (any size, dedup, on-demand); stream/preview from hub (Service Worker); keep-offline pin works with hub down; per-person keys + LAN P2P planned |
-| 4 | Assistant | Working — bring-your-own-key, tool-calling over local data, browser-direct |
+---
 
-Surfaces: **web** (working) · **browser extension** (working — quick-capture popup, right-click capture, syncs as its own device) · **desktop** (working — Electron shell, Alt+Shift+C global capture hotkey, and an optional "hub mode" that hosts the sync hub for your other devices) · **mobile** (Android via Capacitor — branded, hub-wired, `cap copy` verified; APK build + on-device testing need the Android SDK) · iOS planned.
+## Status
+
+Working today, verified end to end: capture with the `#` command palette, the processing queue, notes with two-way links, the master calendar, encrypted sync between devices, shared spaces with device presence and QR join, chunked encrypted file transfer with streaming preview and offline pinning, the multi-provider assistant, and the installable offline PWA.
+
+| Surface | State |
+| --- | --- |
+| Web | Working — the primary surface; installable PWA, offline-capable |
+| Browser extension | Working — quick-capture popup, right-click capture, syncs as its own device |
+| Desktop | Working — Electron shell, global capture hotkey, optional hub mode that hosts the sync hub for your other devices |
+| Mobile | Android project wired and branded (Capacitor); APK build and on-device testing require the Android SDK. iOS planned. |
+| Hub | Working — deployable service, embeddable library, or desktop hub mode |
+
+Planned next: per-person space keys (membership, revocation, attribution — with a hybrid post-quantum key exchange), media uploads inside notes via the existing file pipeline, share-to-capture on Android, and local-network peer-to-peer file transfer.
 
 ---
 
 ## Contributing
 
-Contributions are welcome. The shared engine is the most approachable entry point, since its logic stands alone. Please read the organization-wide [contributing guidelines](https://github.com/cuenest/.github/blob/main/CONTRIBUTING.md), and open an issue to discuss substantial changes before submitting a pull request.
-
----
+Contributions are welcome. The engine is the most approachable entry point, since its logic stands alone and is fully unit-tested. Please read the organization-wide [contributing guidelines](https://github.com/cuenest/.github/blob/main/CONTRIBUTING.md), and open an issue to discuss substantial changes before submitting a pull request.
 
 ## License
 
-This repository is intended to be released under the GNU Affero General Public License v3.0, which keeps the project open even when it is run as a network service. The hosted service in `cue-cloud` is proprietary. Final license terms are being confirmed prior to the first public release.
+[AGPL-3.0](LICENSE). The copyleft applies even when Cue is run as a network service, which keeps the project open. The hosted convenience service (`cue-cloud`) is a separate, private repository; every feature and everything that touches user data is here.
