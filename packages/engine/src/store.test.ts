@@ -54,3 +54,37 @@ describe('CueStore update/subscribe', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('CueStore pin registry', () => {
+  it('records which devices pinned a file, per device', () => {
+    const store = new CueStore();
+    store.setDevicePin('dev-a', 'file-1', true);
+    store.setDevicePin('dev-b', 'file-1', true);
+    store.setDevicePin('dev-a', 'file-2', true);
+    expect(store.getFilePinners('file-1').sort()).toEqual(['dev-a', 'dev-b']);
+    expect(store.getFilePinners('file-2')).toEqual(['dev-a']);
+    expect(store.getFilePinners('unknown')).toEqual([]);
+  });
+
+  it('unpinning removes only that device', () => {
+    const store = new CueStore();
+    store.setDevicePin('dev-a', 'file-1', true);
+    store.setDevicePin('dev-b', 'file-1', true);
+    store.setDevicePin('dev-a', 'file-1', false);
+    expect(store.getFilePinners('file-1')).toEqual(['dev-b']);
+  });
+
+  it('unpinning something never pinned is a harmless no-op', () => {
+    const store = new CueStore();
+    store.setDevicePin('dev-a', 'file-1', false);
+    expect(store.getFilePinners('file-1')).toEqual([]);
+  });
+
+  it('notifies subscribers on pin changes', () => {
+    const store = new CueStore();
+    const listener = vi.fn();
+    store.subscribePins(listener);
+    store.setDevicePin('dev-a', 'file-1', true);
+    expect(listener).toHaveBeenCalled();
+  });
+});

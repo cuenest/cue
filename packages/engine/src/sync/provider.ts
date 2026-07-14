@@ -1,5 +1,11 @@
 import * as Y from 'yjs';
-import { encryptUpdate, decryptUpdate, toBase64Url, fromBase64Url } from './crypto';
+import { toBase64Url, fromBase64Url } from './crypto';
+import {
+  keyringFromLegacy,
+  encryptForKeyring,
+  decryptWithKeyring,
+  type Keyring,
+} from './keyring';
 
 export type SyncStatus = 'offline' | 'connecting' | 'connected';
 
@@ -18,6 +24,12 @@ export interface HubProviderOptions {
   url: string;
   room: string;
   key: string;
+  /**
+   * Full key history for rotated spaces: outbound updates encrypt under the
+   * current epoch, inbound updates decrypt by whatever epoch they name.
+   * Omitted → a single-epoch ring is built from `key` (pre-rotation spaces).
+   */
+  keyring?: Keyring;
   /** Injectable for tests; defaults to the global WebSocket. */
   WebSocketImpl?: new (url: string) => WebSocketLike;
   /** Base reconnect delay in ms (doubles per attempt, capped). */
@@ -35,6 +47,7 @@ export class HubProvider {
   private readonly doc: Y.Doc;
   private readonly opts: Required<Pick<HubProviderOptions, 'url' | 'room' | 'key'>> &
     HubProviderOptions;
+  private readonly keyring: Keyring;
   private ws: WebSocketLike | null = null;
   private lastSeq = 0;
   private destroyed = false;
@@ -46,6 +59,7 @@ export class HubProvider {
   constructor(doc: Y.Doc, opts: HubProviderOptions) {
     this.doc = doc;
     this.opts = opts;
+    this.keyring = opts.keyring ?? keyringFromLegacy(opts.key, opts.room);
     doc.on('update', this.onDocUpdate);
     this.connect();
   }
@@ -76,7 +90,7 @@ export class HubProvider {
   private async push(update: Uint8Array) {
     const ws = this.ws;
     if (!ws || ws.readyState !== OPEN) return; // offline edits arrive via replay later
-    const cipher = await encryptUpdate(this.opts.key, update);
+    const cipher = await encryptForKeyring(this.keyring, update);
     // the socket may have closed/destroyed during the await — re-check before sending
     if (ws.readyState === OPEN) ws.send(JSON.stringify({ t: 'push', data: toBase64Url(cipher) }));
   }
@@ -104,7 +118,7 @@ export class HubProvider {
           const msg = JSON.parse(String(ev.data)) as { t: string; seq?: number; data?: string };
           if (msg.t === 'update' && typeof msg.seq === 'number' && msg.data) {
             this.lastSeq = Math.max(this.lastSeq, msg.seq);
-            const plain = await decryptUpdate(this.opts.key, fromBase64Url(msg.data));
+            const plain = await decryptWithKeyring(this.keyring, fromBase64Url(msg.data));
             Y.applyUpdate(this.doc, plain, this);
           }
         } catch (err) {

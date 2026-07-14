@@ -1,35 +1,62 @@
 import {
   sha256,
-  encryptUpdate,
-  decryptUpdate,
+  keyringFromLegacy,
+  encryptForKeyring,
+  decryptWithKeyring,
   DEFAULT_CHUNK_SIZE,
   type BlobIO,
   type FileManifest,
+  type Keyring,
 } from '@cue/engine';
 import { localChunks, setPinned } from './localStore';
 
-/** A BlobIO backed by the hub's HTTP blob store. Converts the ws:// hub URL to http://. */
-export function hubBlobIO(hubWsUrl: string, room: string): BlobIO {
+/** Bare key (pre-rotation spaces) or the full key history. */
+export type TransferKey = string | Keyring;
+
+function asKeyring(key: TransferKey): Keyring {
+  return typeof key === 'string' ? keyringFromLegacy(key, '') : key;
+}
+
+/**
+ * A BlobIO backed by the hub's HTTP blob store. Converts the ws:// hub URL to
+ * http://. `rooms` is the room history, current first — after a key rotation
+ * the space moves to a new room, but chunks uploaded earlier still live under
+ * the old one, so reads fall back through the history. Writes always go to the
+ * current room.
+ */
+export function hubBlobIO(hubWsUrl: string, rooms: string | string[]): BlobIO {
   const base = hubWsUrl.replace(/^ws/, 'http').replace(/\/+$/, '');
-  const url = (hash: string) =>
+  const roomList = typeof rooms === 'string' ? [rooms] : rooms;
+  const url = (room: string, hash: string) =>
     `${base}/blob/${encodeURIComponent(room)}/${encodeURIComponent(hash)}`;
   return {
     async has(hash) {
-      try {
-        const r = await fetch(url(hash), { method: 'HEAD' });
-        return r.ok;
-      } catch {
-        return false;
+      for (const room of roomList) {
+        try {
+          const r = await fetch(url(room, hash), { method: 'HEAD' });
+          if (r.ok) return true;
+        } catch {
+          /* try the next room */
+        }
       }
+      return false;
     },
     async put(hash, cipher) {
-      const r = await fetch(url(hash), { method: 'PUT', body: cipher as BodyInit });
+      const r = await fetch(url(roomList[0]!, hash), { method: 'PUT', body: cipher as BodyInit });
       if (!r.ok) throw new Error(`blob put failed: ${r.status}`);
     },
     async get(hash) {
-      const r = await fetch(url(hash));
-      if (!r.ok) throw new Error(`blob get failed: ${r.status}`);
-      return new Uint8Array(await r.arrayBuffer());
+      let lastStatus = 0;
+      for (const room of roomList) {
+        try {
+          const r = await fetch(url(room, hash));
+          if (r.ok) return new Uint8Array(await r.arrayBuffer());
+          lastStatus = r.status;
+        } catch {
+          /* try the next room */
+        }
+      }
+      throw new Error(`blob get failed: ${lastStatus || 'network'}`);
     },
   };
 }
@@ -61,11 +88,12 @@ export async function hashFileChunks(file: File): Promise<string[]> {
 export async function uploadFileChunks(
   file: File,
   hashes: string[],
-  key: string,
+  key: TransferKey,
   io: BlobIO,
   onProgress?: (done: number, total: number) => void,
   concurrency = 3,
 ): Promise<void> {
+  const kr = asKeyring(key);
   let done = 0;
   let cursor = 0;
   async function worker(): Promise<void> {
@@ -74,7 +102,7 @@ export async function uploadFileChunks(
       if (i >= hashes.length) return;
       const hash = hashes[i]!;
       if (!(await io.has(hash))) {
-        await io.put(hash, await encryptUpdate(key, await sliceBytes(file, i)));
+        await io.put(hash, await encryptForKeyring(kr, await sliceBytes(file, i)));
       }
       done += 1;
       onProgress?.(done, hashes.length);
@@ -131,14 +159,15 @@ export async function unpinFile(manifest: FileManifest): Promise<void> {
  */
 export async function assemblePlaintext(
   manifest: FileManifest,
-  key: string,
+  key: TransferKey,
   io: BlobIO,
 ): Promise<Uint8Array> {
+  const kr = asKeyring(key);
   const out = new Uint8Array(manifest.size);
   let offset = 0;
   for (const hash of manifest.chunkHashes) {
     const cipher = await io.get(hash);
-    const plain = await decryptUpdate(key, cipher);
+    const plain = await decryptWithKeyring(kr, cipher);
     if ((await sha256(plain)) !== hash) throw new Error('chunk hash mismatch');
     out.set(plain, offset);
     offset += plain.length;

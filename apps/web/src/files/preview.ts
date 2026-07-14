@@ -1,4 +1,4 @@
-import { DEFAULT_CHUNK_SIZE, type FileManifest } from '@cue/engine';
+import { DEFAULT_CHUNK_SIZE, type FileManifest, type Keyring } from '@cue/engine';
 
 export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf';
 
@@ -28,14 +28,19 @@ export function registerFileWorker(): Promise<ServiceWorkerRegistration | null> 
  */
 export async function preparePreview(
   manifest: FileManifest,
-  transport: { hub: string; room: string; key: string },
+  transport: { hub: string; room: string; key: string; keyring?: Keyring; rooms?: string[] },
 ): Promise<string> {
   await registerFileWorker();
   const ready = await navigator.serviceWorker.ready;
+  const keyring = transport.keyring;
   const info = {
     httpHub: transport.hub.replace(/^ws/, 'http').replace(/\/+$/, ''),
+    // room/key: what a pre-epoch worker expects; rooms/keys: the full history
+    // so a rotated space can stream pre-rotation chunks from older rooms.
     room: transport.room,
     key: transport.key,
+    rooms: transport.rooms ?? [transport.room],
+    keys: keyring ? keyring.epochs.map((e) => ({ e: e.epoch, k: e.key })) : undefined,
     chunkHashes: manifest.chunkHashes,
     chunkSize: DEFAULT_CHUNK_SIZE,
     size: manifest.size,

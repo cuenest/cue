@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { assembleFile, type FileManifest } from '@cue/engine';
 import { Panel } from '../components/Panel';
@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button';
 import { useEngine, useItems } from '../useEngine';
 import { navigate } from '../router';
 import { spaceManager } from '../spaces/manager';
+import { deviceId } from '../devices/identity';
 import {
   hubBlobIO,
   hashFileChunks,
@@ -53,6 +54,14 @@ export function FilesView() {
   }
   const [pinning, setPinning] = useState<string | null>(null);
 
+  // Reconcile pins made before the replicated registry existed (idempotent).
+  useEffect(() => {
+    const id = deviceId();
+    for (const fileId of pinnedIds()) {
+      if (!engine.getFilePinners(fileId).includes(id)) engine.setDevicePin(id, fileId, true);
+    }
+  }, [engine]);
+
   // no hub for the active space → can't move bytes
   if (!transport) {
     return (
@@ -76,8 +85,9 @@ export function FilesView() {
     );
   }
 
-  const io = hubBlobIO(transport.hub, transport.room);
-  const key = transport.key;
+  // rooms: current first, older rooms still hold pre-rotation chunks
+  const io = hubBlobIO(transport.hub, transport.rooms);
+  const key = transport.keyring;
 
   async function onPick(file: File | undefined) {
     if (!file) return;
@@ -114,9 +124,11 @@ export function FilesView() {
     try {
       if (pinned.has(m.id)) {
         await unpinFile(m);
+        engine.setDevicePin(deviceId(), m.id, false);
       } else {
         setPinning(m.id);
         await pinFile(m, io);
+        engine.setDevicePin(deviceId(), m.id, true); // tell other devices who holds the bytes
       }
       setPinnedState(pinnedIds());
     } catch {
@@ -158,9 +170,38 @@ export function FilesView() {
     }
   }
 
-  function statusLabel(m: FileManifest): string {
-    if (progress && progress.id === m.id) return `uploading ${progress.pct}%`;
-    return m.hubComplete ? 'available' : 'on this device only';
+  /** Where this file's bytes live — the honest durability picture per file. */
+  function replication(m: FileManifest): { label: string; warn: boolean; title: string } {
+    if (progress && progress.id === m.id) {
+      return { label: `uploading ${progress.pct}%`, warn: true, title: 'Upload in progress' };
+    }
+    const mine = deviceId();
+    const pinners = engine.getFilePinners(m.id);
+    const names = pinners.map((id) =>
+      id === mine
+        ? 'this device'
+        : engine.getDevices().find((d) => d.id === id)?.name ?? 'another device',
+    );
+    if (!m.hubComplete) {
+      return {
+        label: 'on this device only',
+        warn: true,
+        title: 'Not fully uploaded yet — no other device or hub holds this file',
+      };
+    }
+    if (pinners.length === 0) {
+      return {
+        label: 'hub only',
+        warn: true,
+        title:
+          'No device keeps an offline copy — if the hub loses its data (free hubs do on restart), this file is gone. Tap "Keep offline" to protect it.',
+      };
+    }
+    return {
+      label: pinners.length === 1 ? `hub + ${names[0]}` : `hub + ${pinners.length} devices`,
+      warn: false,
+      title: `Offline copies: ${names.join(', ')}`,
+    };
   }
 
   return (
@@ -236,16 +277,22 @@ export function FilesView() {
                 )}
               >
                 <span className="min-w-0 flex-1 truncate text-sm">{f.name}</span>
-                <span
-                  className={cn(
-                    'shrink-0 font-mono text-[10px] uppercase tracking-widest',
-                    f.hubComplete
-                      ? 'text-muted-foreground'
-                      : 'bg-primary px-1.5 py-0.5 font-semibold text-primary-foreground',
-                  )}
-                >
-                  {statusLabel(f)}
-                </span>
+                {(() => {
+                  const r = replication(f);
+                  return (
+                    <span
+                      title={r.title}
+                      className={cn(
+                        'shrink-0 font-mono text-[10px] uppercase tracking-widest',
+                        r.warn
+                          ? 'bg-primary px-1.5 py-0.5 font-semibold text-primary-foreground'
+                          : 'text-muted-foreground',
+                      )}
+                    >
+                      {r.label}
+                    </span>
+                  );
+                })()}
                 <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
                   {fmtSize(f.size)} · {timeAgo(f.addedAt)}
                 </span>

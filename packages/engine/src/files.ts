@@ -1,4 +1,16 @@
-import { encryptUpdate, decryptUpdate } from './sync/crypto';
+import {
+  keyringFromLegacy,
+  encryptForKeyring,
+  decryptWithKeyring,
+  type Keyring,
+} from './sync/keyring';
+
+/** Every byte-level API here takes a bare key (legacy, epoch 0) or a full keyring. */
+export type FileKey = string | Keyring;
+
+function asKeyring(key: FileKey): Keyring {
+  return typeof key === 'string' ? keyringFromLegacy(key, '') : key;
+}
 
 /**
  * File transfer: files are split into chunks, each chunk is content-addressed by
@@ -74,14 +86,15 @@ export async function planUpload(
 export async function uploadChunks(
   chunks: Uint8Array[],
   hashes: string[],
-  key: string,
+  key: FileKey,
   io: BlobIO,
   onProgress?: (done: number, total: number) => void,
 ): Promise<void> {
+  const kr = asKeyring(key);
   for (let i = 0; i < chunks.length; i++) {
     const hash = hashes[i]!;
     if (!(await io.has(hash))) {
-      const cipher = await encryptUpdate(key, chunks[i]!);
+      const cipher = await encryptForKeyring(kr, chunks[i]!);
       await io.put(hash, cipher);
     }
     onProgress?.(i + 1, chunks.length);
@@ -91,12 +104,13 @@ export async function uploadChunks(
 /** Stream decrypted chunks in order, verifying each against its hash. Peak memory = one chunk. */
 export async function* downloadChunks(
   manifest: FileManifest,
-  key: string,
+  key: FileKey,
   io: BlobIO,
 ): AsyncGenerator<Uint8Array> {
+  const kr = asKeyring(key);
   for (const hash of manifest.chunkHashes) {
     const cipher = await io.get(hash);
-    const plain = await decryptUpdate(key, cipher);
+    const plain = await decryptWithKeyring(kr, cipher);
     if ((await sha256(plain)) !== hash) throw new Error(`chunk hash mismatch: ${hash}`);
     yield plain;
   }
@@ -105,7 +119,7 @@ export async function* downloadChunks(
 /** Convenience: reassemble the whole file in memory (tests / small files). */
 export async function assembleFile(
   manifest: FileManifest,
-  key: string,
+  key: FileKey,
   io: BlobIO,
 ): Promise<Uint8Array> {
   const out = new Uint8Array(manifest.size);

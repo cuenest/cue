@@ -16,12 +16,19 @@
 
 /** Registry of AEAD suites. The byte value is wire-stable; never reuse a value. */
 export const CRYPTO_SUITE = {
-  /** AES-256-GCM with a 12-byte IV — the founding suite. */
+  /** AES-256-GCM with a 12-byte IV — the founding suite. Implies key epoch 0. */
   AES_256_GCM: 0x01,
+  /**
+   * AES-256-GCM with a 12-byte IV, prefixed by the 4-byte big-endian key epoch:
+   * [suite:1][epoch:4][iv:12][ciphertext+tag]. Epochs let a space rotate its key
+   * ("change the locks") while every historical payload names the key it needs.
+   */
+  AES_256_GCM_EPOCH: 0x02,
 } as const;
 
 const CURRENT_SUITE = CRYPTO_SUITE.AES_256_GCM;
 const SUITE_LENGTH = 1;
+const EPOCH_LENGTH = 4;
 const IV_LENGTH = 12;
 
 function toBase64Url(bytes: Uint8Array): string {
@@ -71,14 +78,47 @@ export async function encryptUpdate(keyB64: string, update: Uint8Array): Promise
   return out;
 }
 
+/** Same as encryptUpdate but writes the epoch envelope (suite 0x02). */
+export async function encryptUpdateEpoch(
+  keyB64: string,
+  epoch: number,
+  update: Uint8Array,
+): Promise<Uint8Array> {
+  const key = await importKey(keyB64);
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+  const cipher = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv as unknown as Bytes },
+    key,
+    update as unknown as Bytes,
+  );
+  const out = new Uint8Array(SUITE_LENGTH + EPOCH_LENGTH + IV_LENGTH + cipher.byteLength);
+  out[0] = CRYPTO_SUITE.AES_256_GCM_EPOCH;
+  new DataView(out.buffer).setUint32(SUITE_LENGTH, epoch, false);
+  out.set(iv, SUITE_LENGTH + EPOCH_LENGTH);
+  out.set(new Uint8Array(cipher), SUITE_LENGTH + EPOCH_LENGTH + IV_LENGTH);
+  return out;
+}
+
+/** Which key epoch a payload was encrypted under. Suite 0x01 predates epochs → 0. */
+export function payloadEpoch(payload: Uint8Array): number {
+  const suite = payload[0];
+  if (suite === CRYPTO_SUITE.AES_256_GCM) return 0;
+  if (suite === CRYPTO_SUITE.AES_256_GCM_EPOCH) {
+    return new DataView(payload.buffer, payload.byteOffset).getUint32(SUITE_LENGTH, false);
+  }
+  throw new Error(`unknown crypto suite 0x${(suite ?? 0).toString(16).padStart(2, '0')}`);
+}
+
 export async function decryptUpdate(keyB64: string, payload: Uint8Array): Promise<Uint8Array> {
   const suite = payload[0];
-  if (suite !== CRYPTO_SUITE.AES_256_GCM) {
+  if (suite !== CRYPTO_SUITE.AES_256_GCM && suite !== CRYPTO_SUITE.AES_256_GCM_EPOCH) {
     throw new Error(`unknown crypto suite 0x${(suite ?? 0).toString(16).padStart(2, '0')}`);
   }
+  const headerLength =
+    suite === CRYPTO_SUITE.AES_256_GCM_EPOCH ? SUITE_LENGTH + EPOCH_LENGTH : SUITE_LENGTH;
   const key = await importKey(keyB64);
-  const iv = payload.slice(SUITE_LENGTH, SUITE_LENGTH + IV_LENGTH);
-  const cipher = payload.slice(SUITE_LENGTH + IV_LENGTH);
+  const iv = payload.slice(headerLength, headerLength + IV_LENGTH);
+  const cipher = payload.slice(headerLength + IV_LENGTH);
   const plain = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: iv as unknown as Bytes },
     key,

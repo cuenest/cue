@@ -2,7 +2,14 @@ import './style.css';
 import { createRoot } from 'react-dom/client';
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
-import { createEngine, HubProvider, type SyncStatus } from '@cue/engine';
+import {
+  createEngine,
+  HubProvider,
+  keyringFromLegacy,
+  type EpochKey,
+  type Keyring,
+  type SyncStatus,
+} from '@cue/engine';
 import { drainPending } from '../../lib/pending';
 import { PopupApp } from './App';
 
@@ -23,6 +30,14 @@ export interface ExtSyncConfig {
   room: string;
   key: string;
   hub: string;
+  /** Full key history from a v2 (rotated-space) link code. */
+  epochs?: EpochKey[];
+  current?: number;
+}
+
+function cfgKeyring(cfg: ExtSyncConfig): Keyring {
+  if (cfg.epochs && cfg.epochs.length > 0) return { current: cfg.current ?? 0, epochs: cfg.epochs };
+  return keyringFromLegacy(cfg.key, cfg.room);
 }
 let provider: HubProvider | null = null;
 let status: SyncStatus = 'offline';
@@ -52,7 +67,12 @@ function start(): void {
     statusListeners.forEach((l) => l(status));
     return;
   }
-  provider = new HubProvider(doc, { url: cfg.hub, room: cfg.room, key: cfg.key });
+  provider = new HubProvider(doc, {
+    url: cfg.hub,
+    room: cfg.room,
+    key: cfg.key,
+    keyring: cfgKeyring(cfg),
+  });
   provider.onStatus((s) => {
     status = s;
     statusListeners.forEach((l) => l(s));

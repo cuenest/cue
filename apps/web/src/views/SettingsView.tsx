@@ -3,8 +3,8 @@ import QRCode from 'qrcode';
 import { generateSyncKey, makeLinkCode, parseLinkCode, isOnline } from '@cue/engine';
 import { Panel } from '../components/Panel';
 import { useEngine, useItems } from '../useEngine';
-import { syncManager, useSyncStatus, DEFAULT_HUB, type SyncConfig } from '../sync/manager';
-import { spaceManager, useActiveSpace } from '../spaces/manager';
+import { syncManager, useSyncStatus, configKeyring, DEFAULT_HUB, type SyncConfig } from '../sync/manager';
+import { spaceManager, spaceKeyring, useActiveSpace } from '../spaces/manager';
 import { deviceId, deviceName, setDeviceName, deviceSurface } from '../devices/identity';
 import { getAiConfig, setAiConfig } from '../ai/config';
 import { PROVIDERS, detectProvider, providerById } from '../ai/providers';
@@ -28,6 +28,47 @@ function SectionHeader({ index, title }: { index: string; title: string }) {
   );
 }
 
+/**
+ * Two-step "change the locks" control. Rotation issues a fresh key + room:
+ * old invite codes stop granting access to anything new, and every other
+ * device must re-scan the new code. Old data stays readable — a device that
+ * already synced it keeps it; that can't be revoked and we don't pretend it can.
+ */
+function RotateControl({ onRotate, busy }: { onRotate: () => Promise<void>; busy: boolean }) {
+  const [confirming, setConfirming] = useState(false);
+  if (!confirming) {
+    return (
+      <Button size="sm" variant="ghost" onClick={() => setConfirming(true)}>
+        Rotate key…
+      </Button>
+    );
+  }
+  return (
+    <div className="mt-2 w-full border border-border-strong bg-background px-3 py-2.5">
+      <p className="text-[12px] leading-relaxed text-muted-foreground">
+        Rotating issues a fresh key: <span className="font-semibold text-foreground">old invite
+        codes stop working for anything new</span>, and your other devices keep working only after
+        re-scanning the new code. Anything someone already synced stays with them — rotation
+        changes the locks going forward, it can’t take back the past.
+      </p>
+      <div className="mt-2 flex gap-2">
+        <Button
+          size="sm"
+          disabled={busy}
+          onClick={() => {
+            void onRotate().finally(() => setConfirming(false));
+          }}
+        >
+          {busy ? 'Rotating…' : 'Rotate now'}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function SyncSection() {
   const status = useSyncStatus();
   const [config, setConfig] = useState<SyncConfig | null>(() => syncManager.getConfig());
@@ -37,8 +78,9 @@ function SyncSection() {
   const [showCode, setShowCode] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [rotating, setRotating] = useState(false);
 
-  const linkCode = config ? makeLinkCode({ room: config.room, key: config.key, hub: config.hub }) : null;
+  const linkCode = config ? makeLinkCode({ keyring: configKeyring(config), hub: config.hub }) : null;
 
   useEffect(() => {
     if (showCode && linkCode) {
@@ -73,10 +115,28 @@ function SyncSection() {
       key: parsed.key,
       hub: parsed.hub ?? hub.trim() ?? DEFAULT_HUB,
     };
+    if (parsed.keyring.epochs.length > 1) {
+      cfg.epochs = parsed.keyring.epochs; // rotated space: keep the history for old files
+      cfg.current = parsed.keyring.current;
+    }
     syncManager.configure(cfg);
     setConfig(cfg);
     setJoinCode('');
     return true;
+  }
+
+  async function rotate() {
+    setError(null);
+    setRotating(true);
+    try {
+      const next = await syncManager.rotate();
+      if (next) {
+        setConfig(next);
+        setShowCode(true); // other devices must re-scan — surface the new code immediately
+      }
+    } finally {
+      setRotating(false);
+    }
   }
 
   function joinSpace(e: FormEvent) {
@@ -156,12 +216,13 @@ function SyncSection() {
               <Button variant="ghost" onClick={leave}>
                 Leave sync space
               </Button>
+              <RotateControl onRotate={rotate} busy={rotating} />
             </div>
             {showCode && linkCode && (
               <div className="mt-3 border-t border-border pt-3">
                 <p className="mb-2 font-mono text-[11px] text-muted-foreground">
-                  scan on the other device, or paste the code there — anyone with this code can
-                  read this space
+                  scan on the other device, or paste the code there — anyone who sees this code
+                  can read and edit this space until you rotate the key
                 </p>
                 {qr && <img src={qr} alt="Link QR code" className="border border-border-strong" />}
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -342,11 +403,12 @@ function SpacesSection() {
   const [error, setError] = useState<string | null>(null);
   const [inviteQr, setInviteQr] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [rotatingId, setRotatingId] = useState<string | null>(null);
 
   const invite = inviteFor
     ? (() => {
         const s = spaces.find((x) => x.id === inviteFor);
-        return s ? makeLinkCode({ room: s.room, key: s.key, hub: s.hub }) : null;
+        return s ? makeLinkCode({ keyring: spaceKeyring(s), hub: s.hub }) : null;
       })()
     : null;
 
@@ -383,11 +445,23 @@ function SpacesSection() {
       room: parsed.room,
       key: parsed.key,
       hub: parsed.hub ?? DEFAULT_HUB,
+      keyring: parsed.keyring, // rotated space: keeps the history for old files
     });
     setJoinCode('');
     setJoinName('');
     spaceManager.setActive(s.id);
     return true;
+  }
+
+  async function rotate(id: string) {
+    setError(null);
+    setRotatingId(id);
+    try {
+      const updated = await spaceManager.rotate(id);
+      if (updated) setInviteFor(id); // others must re-scan — surface the new invite immediately
+    } finally {
+      setRotatingId(null);
+    }
   }
 
   function join(e: FormEvent) {
@@ -423,6 +497,7 @@ function SpacesSection() {
                 <Button size="sm" variant="ghost" onClick={() => spaceManager.leave(s.id)}>
                   Leave
                 </Button>
+                <RotateControl onRotate={() => rotate(s.id)} busy={rotatingId === s.id} />
               </li>
             ))}
           </ul>
@@ -430,8 +505,8 @@ function SpacesSection() {
         {invite && (
           <div className="mt-2">
             <p className="mb-2 font-mono text-[11px] text-muted-foreground">
-              scan on the other device, or paste the code there — anyone with this code can read
-              and write the space
+              scan on the other device, or paste the code there — anyone who sees this code can
+              read and write the space until you rotate its key
             </p>
             {inviteQr && (
               <img src={inviteQr} alt="Space invite QR code" className="border border-border-strong" />

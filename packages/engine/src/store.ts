@@ -10,6 +10,7 @@ const SOURCES_KEY = 'sources';
 const FILES_KEY = 'files';
 const DEVICES_KEY = 'devices';
 const NOTES_KEY = 'notes';
+const PINS_KEY = 'pins';
 
 export class CueStore {
   readonly doc: Y.Doc;
@@ -18,6 +19,7 @@ export class CueStore {
   private readonly files: Y.Map<Y.Map<unknown>>;
   private readonly devices: Y.Map<Y.Map<unknown>>;
   private readonly notes: Y.Map<Y.Map<unknown>>;
+  private readonly pins: Y.Map<Y.Map<unknown>>;
 
   constructor(doc: Y.Doc = new Y.Doc()) {
     this.doc = doc;
@@ -26,6 +28,7 @@ export class CueStore {
     this.files = doc.getMap(FILES_KEY);
     this.devices = doc.getMap(DEVICES_KEY);
     this.notes = doc.getMap(NOTES_KEY);
+    this.pins = doc.getMap(PINS_KEY);
   }
 
   addItem(body: string, now: number = Date.now()): Item {
@@ -226,6 +229,40 @@ export class CueStore {
     const handler = () => listener();
     this.devices.observeDeep(handler);
     return () => this.devices.unobserveDeep(handler);
+  }
+
+  // ---- Pin registry ----------------------------------------------------------
+  // Replicated map of deviceId → { fileId: true }. Answers "which devices hold an
+  // offline copy of this file" — the basis of the per-file replication status
+  // (and the "this exists only on the hub" warning). Keyed per device so
+  // concurrent pins on different devices never conflict.
+
+  setDevicePin(deviceId: string, fileId: string, pinned: boolean): void {
+    this.doc.transact(() => {
+      let byDevice = this.pins.get(deviceId);
+      if (!byDevice) {
+        if (!pinned) return;
+        byDevice = new Y.Map<unknown>();
+        this.pins.set(deviceId, byDevice);
+      }
+      if (pinned) byDevice.set(fileId, true);
+      else byDevice.delete(fileId);
+    });
+  }
+
+  /** Device ids that report a pinned (offline) copy of this file. */
+  getFilePinners(fileId: string): string[] {
+    const out: string[] = [];
+    this.pins.forEach((byDevice, deviceId) => {
+      if (byDevice.get(fileId)) out.push(deviceId);
+    });
+    return out;
+  }
+
+  subscribePins(listener: () => void): () => void {
+    const handler = () => listener();
+    this.pins.observeDeep(handler);
+    return () => this.pins.unobserveDeep(handler);
   }
 
   // ---- Notes ----------------------------------------------------------------

@@ -37,7 +37,7 @@ Notes are persistent reference material, distinct from queue items. They render 
 Import any calendar as a read-only ICS feed (Google, Outlook, and Apple all export one) and see it merged with your own scheduled items in one month view and agenda. Imported events are visually distinct and locked; recurrence rules are expanded by the engine.
 
 ### Files
-Send files of any size between devices in a space. Files are split into content-addressed chunks, encrypted, and stored on the hub; only the small manifest lives in the synced document, so bytes move on demand instead of replicating to every device. Media previews stream — a Service Worker fetches, decrypts, and range-serves chunks so a video plays without downloading fully. "Keep offline" pins a file's chunks into local storage so it opens and downloads even when the hub is down.
+Send files of any size between devices in a space. Files are split into content-addressed chunks, encrypted, and stored on the hub; only the small manifest lives in the synced document, so bytes move on demand instead of replicating to every device. Media previews stream — a Service Worker fetches, decrypts, and range-serves chunks so a video plays without downloading fully. "Keep offline" pins a file's chunks into local storage so it opens and downloads even when the hub is down. Pins are announced in the space, so every file shows where its bytes actually live — and a file that exists only on the hub is flagged, since a hub wipe would lose it.
 
 ### Shared spaces and devices
 A space is a separate encrypted world — its own queue, calendar, notes, and files — shared with whoever holds its invite code (shown as a QR, scannable in-app with the camera). Settings lists every device in a space with live presence, and each device can be named.
@@ -54,8 +54,9 @@ Open the deployed site, choose "Install" or "Add to Home Screen", and Cue runs a
 
 - **Spaces and hubs.** A space names one hub — a small relay that stores and forwards encrypted updates. Devices in a space connect to that hub; each keeps a full local replica (a Yjs CRDT document), so concurrent and offline edits merge deterministically when devices reconnect. If a space's hub is unreachable, every device keeps working; they converge when it returns. Switching a space to a different hub is always safe, because replicas re-push on connect.
 - **Link codes.** Creating a space generates a random room id and a random 256-bit key. Both travel inside the QR/link code, never through the hub. The hub learns which room to relay for — it never learns the key, so it stores ciphertext it cannot open.
-- **Encryption.** Updates and file chunks are encrypted with AES-256-GCM. Every ciphertext is self-describing — a leading suite byte names the algorithm that produced it — so future cipher suites (including post-quantum constructions for the planned per-person key layer) can be introduced without migrating existing data.
-- **Trust model, stated honestly.** Today a space is a shared vault: everyone holding the invite code has equal read/write access, so share it like a house key. A membership model with per-person keys — enabling revocation and attribution — is designed and planned; it wraps the existing shared key rather than replacing the data encryption.
+- **Encryption.** Updates and file chunks are encrypted with AES-256-GCM. Every ciphertext is self-describing — a leading suite byte names the algorithm that produced it, and rotated spaces add the key epoch — so future cipher suites (including post-quantum constructions for the planned per-person key layer) can be introduced without migrating existing data.
+- **Key rotation ("change the locks").** Every space — personal or shared — can rotate its key from Settings. Rotation issues a fresh key and a fresh hub room as a new *epoch*: old invite codes stop granting access to anything new, and other devices re-join by scanning the new code (their replicas re-push on connect, so nothing is lost). Old epochs stay in the keyring, so pre-rotation data and file chunks remain readable forever. Rotation protects the future, never erases the past: anyone who already synced data keeps what they have — that is a law of local-first systems, not a gap.
+- **Trust model, stated honestly.** Today a space is a shared vault: everyone holding the invite code has equal read/write access, so share it like a house key — and rotate the key if it leaks. A membership model with per-person keys — enabling per-member revocation and attribution without re-scanning — is designed and planned; it wraps the existing shared key rather than replacing the data encryption.
 
 You can run the hub anywhere Node runs, host it on a free cloud instance, or turn the desktop app into one (see below). One hub can serve many users: rooms are isolated and the content is ciphertext either way.
 
@@ -148,7 +149,7 @@ VITE_DEFAULT_HUB=wss://your-hub.example.com pnpm --filter @cue/web build
 
 ## Status
 
-Working today, verified end to end: capture with the `#` command palette, the processing queue, notes with two-way links, the master calendar, encrypted sync between devices, shared spaces with device presence and QR join, chunked encrypted file transfer with streaming preview and offline pinning, the multi-provider assistant, and the installable offline PWA.
+Working today, verified end to end: capture with the `#` command palette, the processing queue, notes with two-way links, the master calendar, encrypted sync between devices, shared spaces with device presence and QR join, key rotation with epoch-tagged ciphertext, chunked encrypted file transfer with streaming preview, offline pinning and per-file replication status, the multi-provider assistant, and the installable offline PWA.
 
 | Surface | State |
 | --- | --- |

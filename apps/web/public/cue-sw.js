@@ -109,22 +109,45 @@ function localGet(hash) {
   });
 }
 
-async function decryptChunk(info, key, hash) {
+async function decryptChunk(info, keysByEpoch, hash) {
   let payload = await localGet(hash);
   if (!payload) {
-    const res = await fetch(`${info.httpHub}/blob/${info.room}/${hash}`);
-    if (!res.ok) throw new Error('blob ' + res.status);
-    payload = new Uint8Array(await res.arrayBuffer());
+    // rotated spaces: older chunks live under older rooms — try current first
+    const rooms = info.rooms && info.rooms.length ? info.rooms : [info.room];
+    let lastStatus = 0;
+    for (const room of rooms) {
+      try {
+        const res = await fetch(`${info.httpHub}/blob/${room}/${hash}`);
+        if (res.ok) {
+          payload = new Uint8Array(await res.arrayBuffer());
+          break;
+        }
+        lastStatus = res.status;
+      } catch {
+        /* try the next room */
+      }
+    }
+    if (!payload) throw new Error('blob ' + (lastStatus || 'network'));
   } else {
     payload = new Uint8Array(payload);
   }
-  // Envelope: [suite:1][iv:12][ciphertext+tag]. 0x01 = AES-256-GCM.
-  // Must match encryptUpdate in packages/engine/src/sync/crypto.ts.
-  if (payload[0] !== 0x01) throw new Error('unknown crypto suite ' + payload[0]);
+  // Envelope (must match packages/engine/src/sync/crypto.ts):
+  //   0x01 = AES-256-GCM, [suite:1][iv:12][ct+tag], key epoch 0
+  //   0x02 = AES-256-GCM, [suite:1][epoch:4 BE][iv:12][ct+tag]
+  let epoch = 0;
+  let header = 1;
+  if (payload[0] === 0x02) {
+    epoch = new DataView(payload.buffer, payload.byteOffset).getUint32(1, false);
+    header = 5;
+  } else if (payload[0] !== 0x01) {
+    throw new Error('unknown crypto suite ' + payload[0]);
+  }
+  const key = keysByEpoch.get(epoch);
+  if (!key) throw new Error('no key for epoch ' + epoch);
   const plain = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: payload.slice(1, 13) },
+    { name: 'AES-GCM', iv: payload.slice(header, header + 12) },
     key,
-    payload.slice(13),
+    payload.slice(header + 12),
   );
   return new Uint8Array(plain);
 }
@@ -157,9 +180,15 @@ async function serve(request, id) {
   }
   if (!info) return new Response('unknown file', { status: 404 });
 
-  const key = await crypto.subtle.importKey('raw', fromB64url(info.key), { name: 'AES-GCM' }, false, [
-    'decrypt',
-  ]);
+  // one CryptoKey per epoch; pre-epoch info objects carry a single key (epoch 0)
+  const rawKeys = info.keys && info.keys.length ? info.keys : [{ e: 0, k: info.key }];
+  const keysByEpoch = new Map();
+  for (const { e, k } of rawKeys) {
+    keysByEpoch.set(
+      e,
+      await crypto.subtle.importKey('raw', fromB64url(k), { name: 'AES-GCM' }, false, ['decrypt']),
+    );
+  }
   const size = info.size;
   const chunkSize = info.chunkSize;
 
@@ -187,7 +216,7 @@ async function serve(request, id) {
   const last = Math.floor(end / chunkSize);
   const parts = [];
   for (let i = first; i <= last; i++) {
-    const plain = await decryptChunk(info, key, info.chunkHashes[i]);
+    const plain = await decryptChunk(info, keysByEpoch, info.chunkHashes[i]);
     const chunkStart = i * chunkSize;
     const from = Math.max(0, start - chunkStart);
     const to = Math.min(plain.length, end - chunkStart + 1);

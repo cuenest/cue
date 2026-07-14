@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as Y from 'yjs';
 import { HubProvider, type WebSocketLike } from './provider';
-import { generateSyncKey, encryptUpdate, toBase64Url } from './crypto';
+import { generateSyncKey, encryptUpdate, toBase64Url, fromBase64Url, CRYPTO_SUITE } from './crypto';
+import { keyringFromLegacy, rotateKeyring, encryptForKeyring, decryptWithKeyring } from './keyring';
 
 class MockWebSocket implements WebSocketLike {
   static instances: MockWebSocket[] = [];
@@ -86,6 +87,41 @@ describe('HubProvider', () => {
     // remote-applied update must not be pushed back
     const newPushes = ws.sent.slice(sentBefore).map((s) => JSON.parse(s)).filter((m) => m.t === 'push');
     expect(newPushes).toHaveLength(0);
+    provider.destroy();
+  });
+
+  it('with a rotated keyring, pushes under the current epoch and reads older epochs', async () => {
+    const kr0 = keyringFromLegacy(await generateSyncKey(), 'old-room');
+    const kr1 = await rotateKeyring(kr0);
+
+    const doc = new Y.Doc();
+    const provider = new HubProvider(doc, {
+      url: 'ws://test',
+      room: kr1.epochs[1]!.room,
+      key: kr1.epochs[1]!.key,
+      keyring: kr1,
+      WebSocketImpl: MockWebSocket,
+    });
+    const ws = MockWebSocket.instances.at(-1)!;
+    ws.open();
+    await flush();
+
+    // outbound: encrypted under the CURRENT epoch (suite 0x02, epoch 1)
+    doc.getMap('items').set('a', 'b');
+    await flush();
+    const push = ws.sent.map((s) => JSON.parse(s)).filter((m) => m.t === 'push').at(-1)!;
+    const payload = fromBase64Url(push.data);
+    expect(payload[0]).toBe(CRYPTO_SUITE.AES_256_GCM_EPOCH);
+    const plain = await decryptWithKeyring(kr1, payload);
+    expect(plain.length).toBeGreaterThan(0);
+
+    // inbound: an epoch-0 payload (pre-rotation history) still applies
+    const source = new Y.Doc();
+    source.getMap('items').set('old', 'data');
+    const oldCipher = await encryptForKeyring(kr0, Y.encodeStateAsUpdate(source));
+    ws.onmessage?.({ data: JSON.stringify({ t: 'update', seq: 1, data: toBase64Url(oldCipher) }) });
+    await flush();
+    expect(doc.getMap('items').get('old')).toBe('data');
     provider.destroy();
   });
 

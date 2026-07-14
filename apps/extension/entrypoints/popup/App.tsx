@@ -53,7 +53,15 @@ export function PopupApp({ engine }: { engine: CueEngine }) {
       setJoinError('Invalid link code');
       return;
     }
-    setSyncConfig({ room: parsed.room, key: parsed.key, hub: parsed.hub ?? DEFAULT_HUB });
+    setSyncConfig({
+      room: parsed.room,
+      key: parsed.key,
+      hub: parsed.hub ?? DEFAULT_HUB,
+      // rotated space: keep the key history so pre-rotation data stays readable
+      ...(parsed.keyring.epochs.length > 1
+        ? { epochs: parsed.keyring.epochs, current: parsed.keyring.current }
+        : {}),
+    });
     setJoinCode('');
     setJoinError(null);
   }

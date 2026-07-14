@@ -37,6 +37,10 @@ export interface CueEngine {
   getFileManifests(): FileManifest[];
   setHubComplete(id: string, complete: boolean): void;
   removeFile(id: string): void;
+  /** Announce (or retract) this device's offline copy of a file — replicated, so every device sees who holds the bytes. */
+  setDevicePin(deviceId: string, fileId: string, pinned: boolean): void;
+  /** Device ids reporting a pinned offline copy of the file. */
+  getFilePinners(fileId: string): string[];
   /** Announce a device in this space; call again to heartbeat (updates lastSeen). */
   registerDevice(input: { id: string; name: string; surface: string }): void;
   touchDevice(id: string): void;
@@ -80,6 +84,10 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
     snapshot = store.getAllItems(); // notes changes invalidate UI too (chips, backlinks)
     listeners.forEach((l) => l());
   });
+  store.subscribePins(() => {
+    snapshot = store.getAllItems(); // pin registry changes invalidate UI (replication status)
+    listeners.forEach((l) => l());
+  });
 
   return {
     getItems: () => snapshot,
@@ -110,6 +118,8 @@ export function createEngine(doc: Y.Doc = new Y.Doc()): CueEngine {
     getFileManifests: () => store.getFileManifests(),
     setHubComplete: (id, complete) => store.setHubComplete(id, complete),
     removeFile: (id) => store.removeFile(id),
+    setDevicePin: (deviceId, fileId, pinned) => store.setDevicePin(deviceId, fileId, pinned),
+    getFilePinners: (fileId) => store.getFilePinners(fileId),
     registerDevice: (input) => store.registerDevice(input),
     touchDevice: (id) => store.touchDevice(id),
     removeDevice: (id) => store.removeDevice(id),
@@ -167,6 +177,23 @@ export {
 } from './files';
 export { isOnline, DEVICE_ONLINE_MS, type DeviceInfo } from './devices';
 export { slugify, titleFromSlug, parseNoteTokens, backlinks, type Note } from './notes';
-export { generateSyncKey, encryptUpdate, decryptUpdate } from './sync/crypto';
+export {
+  generateSyncKey,
+  encryptUpdate,
+  decryptUpdate,
+  payloadEpoch,
+  CRYPTO_SUITE,
+} from './sync/crypto';
+export {
+  keyringFromLegacy,
+  currentEpochKey,
+  epochKey,
+  rotateKeyring,
+  encryptForKeyring,
+  decryptWithKeyring,
+  MissingEpochKeyError,
+  type Keyring,
+  type EpochKey,
+} from './sync/keyring';
 export { makeLinkCode, parseLinkCode, normalizeHubUrl, type LinkPayload } from './sync/link';
 export { HubProvider, type SyncStatus, type HubProviderOptions } from './sync/provider';
